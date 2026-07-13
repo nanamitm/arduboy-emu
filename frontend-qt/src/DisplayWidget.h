@@ -4,6 +4,7 @@
 #pragma once
 
 #include <QImage>
+#include <QPointF>
 #include <QWidget>
 
 class DisplayWidget : public QWidget {
@@ -33,11 +34,24 @@ public:
 
     QSize sizeHint() const override;
 
+signals:
+    // Button values match EmulatorCore::Button / the C FFI button enum.
+    void buttonChanged(int button, bool pressed);
+
 protected:
     void paintEvent(QPaintEvent *event) override;
+    void mousePressEvent(QMouseEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;
+    void leaveEvent(QEvent *event) override;
+    void focusOutEvent(QFocusEvent *event) override;
 
 private:
+    QPointF skinPoint(const QPointF &widgetPoint) const;
+    int buttonAt(const QPointF &point) const;
+    void releasePointerButton();
+
     QImage m_frame;
     bool m_smooth = false;
     Skin m_skin = Skin::Arduboy;
+    int m_pressedButton = -1;
 };

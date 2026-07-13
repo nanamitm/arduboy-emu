@@ -22,7 +22,8 @@ and forwards input. All state lives in the Rust core.
 - Five switchable vector-rendered device skins (Arduboy, Microcard, Tama,
   Pip-Boy 3000, Pip-Boy Mk IV), persisted between launches via **View ▸ Skin**
 - Scaled display (1×–6×), nearest / smooth scaling, fullscreen (F11)
-- Keyboard input: **Arrows** = D-pad, **Z** = A, **X** = B
+- Input: click / hold the on-screen D-pad and A/B buttons, or use **Arrows**
+  for the D-pad, **Z** for A, and **X** for B
 - Stereo audio via `QAudioSink` (sample-accurate output from the core)
 - Save/load state (F5/F9), PNG screenshots (S), animated GIF recording (G)
 - EEPROM auto-save on exit, reset (Ctrl+R), pause (P), mute (M)

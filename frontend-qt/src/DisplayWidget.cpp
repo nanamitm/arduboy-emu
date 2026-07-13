@@ -1,8 +1,11 @@
 #include "DisplayWidget.h"
 
 #include <QColor>
+#include <QEvent>
+#include <QFocusEvent>
 #include <QFont>
 #include <QLinearGradient>
+#include <QMouseEvent>
 #include <QPainter>
 #include <QSizeF>
 
@@ -49,9 +52,10 @@ SkinSpec specFor(DisplayWidget::Skin skin) {
     }
 }
 
-void drawPad(QPainter &p, const QRectF &rect, const QString &label, bool round = false) {
+void drawPad(QPainter &p, const QRectF &rect, const QString &label, bool round = false,
+             bool active = false) {
     p.setPen(QPen(QColor("#303b49"), 1.0));
-    p.setBrush(QColor("#1b2531"));
+    p.setBrush(active ? QColor("#245166") : QColor("#1b2531"));
     if (round)
         p.drawEllipse(rect);
     else
@@ -105,6 +109,83 @@ QSize DisplayWidget::sizeHint() const {
     return scaledSize(4);
 }
 
+QPointF DisplayWidget::skinPoint(const QPointF &widgetPoint) const {
+    const SkinSpec spec = specFor(m_skin);
+    const qreal scale = qMin(width() / spec.size.width(), height() / spec.size.height());
+    if (scale <= 0.0)
+        return {};
+    const qreal offsetX = (width() - spec.size.width() * scale) / 2.0;
+    const qreal offsetY = (height() - spec.size.height() * scale) / 2.0;
+    return (widgetPoint - QPointF(offsetX, offsetY)) / scale;
+}
+
+int DisplayWidget::buttonAt(const QPointF &point) const {
+    const SkinSpec spec = specFor(m_skin);
+    const qreal step = spec.dpadButton + 3;
+    const struct { QPointF pos; int button; } dpad[] = {
+        {{spec.dpad.x() + step, spec.dpad.y()}, 0},
+        {{spec.dpad.x() + step, spec.dpad.y() + step * 2}, 1},
+        {{spec.dpad.x(), spec.dpad.y() + step}, 2},
+        {{spec.dpad.x() + step * 2, spec.dpad.y() + step}, 3},
+    };
+    for (const auto &entry : dpad) {
+        if (QRectF(entry.pos, QSizeF(spec.dpadButton, spec.dpadButton)).contains(point))
+            return entry.button;
+    }
+    const qreal actionGap = 8;
+    const QRectF bRect(spec.actions, QSizeF(spec.actionButton, spec.actionButton));
+    const QRectF aRect(spec.actions + QPointF(spec.actionButton + actionGap, 0),
+                       QSizeF(spec.actionButton, spec.actionButton));
+    if (bRect.contains(point)) return 5;
+    if (aRect.contains(point)) return 4;
+    return -1;
+}
+
+void DisplayWidget::releasePointerButton() {
+    if (m_pressedButton < 0)
+        return;
+    emit buttonChanged(m_pressedButton, false);
+    m_pressedButton = -1;
+    update();
+}
+
+void DisplayWidget::mousePressEvent(QMouseEvent *event) {
+    if (event->button() != Qt::LeftButton) {
+        QWidget::mousePressEvent(event);
+        return;
+    }
+    const int button = buttonAt(skinPoint(event->position()));
+    if (button < 0) {
+        QWidget::mousePressEvent(event);
+        return;
+    }
+    releasePointerButton();
+    m_pressedButton = button;
+    setFocus(Qt::MouseFocusReason);
+    emit buttonChanged(button, true);
+    update();
+    event->accept();
+}
+
+void DisplayWidget::mouseReleaseEvent(QMouseEvent *event) {
+    if (event->button() == Qt::LeftButton && m_pressedButton >= 0) {
+        releasePointerButton();
+        event->accept();
+        return;
+    }
+    QWidget::mouseReleaseEvent(event);
+}
+
+void DisplayWidget::leaveEvent(QEvent *event) {
+    releasePointerButton();
+    QWidget::leaveEvent(event);
+}
+
+void DisplayWidget::focusOutEvent(QFocusEvent *event) {
+    releasePointerButton();
+    QWidget::focusOutEvent(event);
+}
+
 void DisplayWidget::paintEvent(QPaintEvent *) {
     QPainter p(this);
     p.fillRect(rect(), QColor("#0b0e12"));
@@ -150,16 +231,16 @@ void DisplayWidget::paintEvent(QPaintEvent *) {
     p.drawImage(imageRect, m_frame);
 
     const qreal step = spec.dpadButton + 3;
-    drawPad(p, {spec.dpad.x() + step, spec.dpad.y(), spec.dpadButton, spec.dpadButton}, QStringLiteral("▲"));
-    drawPad(p, {spec.dpad.x(), spec.dpad.y() + step, spec.dpadButton, spec.dpadButton}, QStringLiteral("◀"));
-    drawPad(p, {spec.dpad.x() + step * 2, spec.dpad.y() + step, spec.dpadButton, spec.dpadButton}, QStringLiteral("▶"));
-    drawPad(p, {spec.dpad.x() + step, spec.dpad.y() + step * 2, spec.dpadButton, spec.dpadButton}, QStringLiteral("▼"));
+    drawPad(p, {spec.dpad.x() + step, spec.dpad.y(), spec.dpadButton, spec.dpadButton}, QStringLiteral("▲"), false, m_pressedButton == 0);
+    drawPad(p, {spec.dpad.x(), spec.dpad.y() + step, spec.dpadButton, spec.dpadButton}, QStringLiteral("◀"), false, m_pressedButton == 2);
+    drawPad(p, {spec.dpad.x() + step * 2, spec.dpad.y() + step, spec.dpadButton, spec.dpadButton}, QStringLiteral("▶"), false, m_pressedButton == 3);
+    drawPad(p, {spec.dpad.x() + step, spec.dpad.y() + step * 2, spec.dpadButton, spec.dpadButton}, QStringLiteral("▼"), false, m_pressedButton == 1);
 
     const qreal actionGap = 8;
     QRectF bRect(spec.actions, QSizeF(spec.actionButton, spec.actionButton));
     QRectF aRect(spec.actions + QPointF(spec.actionButton + actionGap, 0), QSizeF(spec.actionButton, spec.actionButton));
-    drawPad(p, bRect, QStringLiteral("B"), true);
-    drawPad(p, aRect, QStringLiteral("A"), true);
+    drawPad(p, bRect, QStringLiteral("B"), true, m_pressedButton == 5);
+    drawPad(p, aRect, QStringLiteral("A"), true, m_pressedButton == 4);
     if (spec.terminal) {
         p.setPen(QPen(QColor("#758060"), 2.0));
         p.setBrush(Qt::NoBrush);

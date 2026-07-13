@@ -1,6 +1,7 @@
 // MainWindow — top-level window: display, menus, input, audio, status bar.
 #pragma once
 
+#include <array>
 #include <QElapsedTimer>
 #include <QMainWindow>
 #include <QVector>
@@ -52,6 +53,7 @@ private:
     void buildMenus();
     void updateStatus();
     void setPaused(bool paused);
+    void setButtonSource(EmulatorCore::Button button, bool pressed, bool skinSource);
     bool mapButton(int key, EmulatorCore::Button &out) const;
     // True if `path` looks like a ROM we can load (.hex / .arduboy / .elf).
     static bool isSupportedRom(const QString &path);
@@ -74,6 +76,8 @@ private:
     QString m_romPath;
     bool m_paused = false;
     int m_scale = 4;
+    std::array<bool, 6> m_keyboardButtons{};
+    std::array<bool, 6> m_skinButtons{};
 
     // FPS measurement
     QElapsedTimer m_fpsClock;

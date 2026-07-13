@@ -40,6 +40,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     if (savedSkin >= 0 && savedSkin <= static_cast<int>(DisplayWidget::Skin::PipboyMkIv))
         m_display->setSkin(static_cast<DisplayWidget::Skin>(savedSkin));
     setCentralWidget(m_display);
+    connect(m_display, &DisplayWidget::buttonChanged, this, [this](int button, bool pressed) {
+        if (button >= EmulatorCore::Up && button <= EmulatorCore::B)
+            setButtonSource(static_cast<EmulatorCore::Button>(button), pressed, true);
+    });
 
     m_audio = new AudioOutput(this);
     m_audio->start(44100);
@@ -321,10 +325,24 @@ bool MainWindow::mapButton(int key, EmulatorCore::Button &out) const {
     }
 }
 
+void MainWindow::setButtonSource(EmulatorCore::Button button, bool pressed, bool skinSource) {
+    const int index = static_cast<int>(button);
+    if (index < EmulatorCore::Up || index > EmulatorCore::B)
+        return;
+    auto &source = skinSource ? m_skinButtons : m_keyboardButtons;
+    if (source.at(index) == pressed)
+        return;
+    const bool wasPressed = m_keyboardButtons.at(index) || m_skinButtons.at(index);
+    source.at(index) = pressed;
+    const bool isPressed = m_keyboardButtons.at(index) || m_skinButtons.at(index);
+    if (wasPressed != isPressed)
+        m_core.setButton(button, isPressed);
+}
+
 void MainWindow::keyPressEvent(QKeyEvent *event) {
     EmulatorCore::Button b;
     if (!event->isAutoRepeat() && mapButton(event->key(), b)) {
-        m_core.setButton(b, true);
+        setButtonSource(b, true, false);
         event->accept();
         return;
     }
@@ -339,7 +357,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
 void MainWindow::keyReleaseEvent(QKeyEvent *event) {
     EmulatorCore::Button b;
     if (!event->isAutoRepeat() && mapButton(event->key(), b)) {
-        m_core.setButton(b, false);
+        setButtonSource(b, false, false);
         event->accept();
         return;
     }
