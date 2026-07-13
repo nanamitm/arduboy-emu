@@ -166,6 +166,26 @@
   input[type=range] { accent-color: var(--accent); }
   #gif.recording { color: #fff; background: #5a2020; border-color: var(--accent-2); }
 
+  /* Online catalog ---------------------------------------------------------- */
+  .catalog { width: min(92vw, 640px); margin-top: 14px; border: 1px solid var(--edge);
+    border-radius: 10px; background: rgba(22,26,33,.82); overflow: hidden; }
+  .catalog[hidden] { display: none; }
+  .catalog-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px;
+    border-bottom: 1px solid var(--edge); }
+  .catalog-head strong { flex: 1; font-size: 14px; }
+  .catalog-controls { display: flex; gap: 8px; flex-wrap: wrap; padding: 10px 12px; }
+  .catalog-controls input { flex: 1 1 180px; min-width: 0; color: var(--ink); background: #0e1319;
+    border: 1px solid var(--edge); border-radius: 8px; padding: 8px 10px; font: inherit; }
+  .catalog-meta { padding: 0 12px 10px; color: var(--muted); font-size: 12px; }
+  .catalog-results { max-height: min(55vh, 520px); overflow: auto; display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; padding: 0 12px 12px; }
+  .catalog-game { display: grid; grid-template-columns: 62px minmax(0, 1fr); gap: 8px; text-align: left;
+    padding: 7px; min-height: 72px; }
+  .catalog-game img { width: 62px; height: 48px; object-fit: cover; background: #090b0d; border-radius: 4px; }
+  .catalog-game span { overflow: hidden; }
+  .catalog-game b, .catalog-game small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .catalog-game b { font-size: 12px; } .catalog-game small { color: var(--muted); font-size: 11px; }
+
   .status {
     width: min(92vw, 640px); margin-top: 12px;
     display: flex; gap: 14px; flex-wrap: wrap; align-items: center;
@@ -217,6 +237,7 @@
   <div class="panel">
     <div class="row">
       <label class="file">Open ROM…<input id="file" type="file" accept=".hex,.arduboy,.elf"></label>
+      <button id="catalog" type="button">Game Catalog</button>
       <label class="file">Load FX…<input id="fx" type="file" accept=".bin"></label>
       <button id="pause" disabled>Pause</button>
       <button id="reset" disabled>Reset</button>
@@ -253,6 +274,19 @@
       <button id="mute">Mute</button>
     </div>
   </div>
+
+  <section id="catalog-panel" class="catalog" hidden aria-labelledby="catalog-title">
+    <div class="catalog-head">
+      <strong id="catalog-title">ArduboyCollection</strong>
+      <button id="catalog-close" type="button" aria-label="Close game catalog">Close</button>
+    </div>
+    <div class="catalog-controls">
+      <input id="catalog-search" type="search" placeholder="Search games or authors" autocomplete="off">
+      <select id="catalog-category" aria-label="Game category"><option value="">All categories</option></select>
+    </div>
+    <div id="catalog-meta" class="catalog-meta">Open the catalog to browse games.</div>
+    <div id="catalog-results" class="catalog-results"></div>
+  </section>
 
   <div class="status">
     <span id="msg">Loading emulator…</span>

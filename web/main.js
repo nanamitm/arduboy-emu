@@ -25,6 +25,7 @@ let palette = 'white';
 let skin = DEFAULT_SKIN;
 const inputSources = Array.from({ length: 6 }, () => new Set());
 const activeGamepads = new Set();
+let catalog = null;
 
 // ── Palette themes (lit / unlit RGB) ─────────────────────────────────────────
 const PALETTES = {
@@ -225,6 +226,87 @@ async function autoLoadFromQuery() {
   }
 }
 
+// ── Online ROM catalog ────────────────────────────────────────────────────
+// The catalog is generated from eried/ArduboyCollection and committed with the
+// site. ROMs and screenshots themselves remain on the upstream GitHub project.
+function catalogMatches(game, query, category) {
+  if (category && game.category !== category) return false;
+  if (!query) return true;
+  const text = `${game.title} ${game.author || ''} ${game.description || ''} ${game.category}`.toLowerCase();
+  return text.includes(query);
+}
+
+function renderCatalog() {
+  if (!catalog) return;
+  const query = $('catalog-search').value.trim().toLowerCase();
+  const category = $('catalog-category').value;
+  const matches = catalog.games.filter((game) => catalogMatches(game, query, category));
+  const results = $('catalog-results');
+  results.replaceChildren();
+  for (const game of matches.slice(0, 120)) {
+    const button = document.createElement('button');
+    button.className = 'catalog-game';
+    button.type = 'button';
+    button.title = game.description || game.title;
+    if (game.imageUrl) {
+      const image = document.createElement('img');
+      image.src = game.imageUrl;
+      image.alt = '';
+      image.loading = 'lazy';
+      image.addEventListener('error', () => image.remove());
+      button.append(image);
+    }
+    const text = document.createElement('span');
+    const title = document.createElement('b');
+    title.textContent = game.title;
+    const byline = document.createElement('small');
+    byline.textContent = [game.author, game.category].filter(Boolean).join(' · ') || 'Unknown author';
+    text.append(title, byline);
+    button.append(text);
+    button.addEventListener('click', () => loadCatalogRom(game));
+    results.append(button);
+  }
+  const limit = matches.length > 120 ? ' — refine your search to see more' : '';
+  $('catalog-meta').textContent = `${matches.length} game${matches.length === 1 ? '' : 's'}${limit}`;
+}
+
+async function openCatalog() {
+  const panel = $('catalog-panel');
+  panel.hidden = false;
+  if (catalog) { renderCatalog(); return; }
+  $('catalog-meta').textContent = 'Loading catalog…';
+  try {
+    const response = await fetch('./catalogs/arduboy-collection.json', { cache: 'no-cache' });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    catalog = await response.json();
+    const select = $('catalog-category');
+    const categories = [...new Set(catalog.games.map((game) => game.category).filter(Boolean))].sort();
+    for (const category of categories) {
+      const option = document.createElement('option');
+      option.value = category;
+      option.textContent = category;
+      select.append(option);
+    }
+    renderCatalog();
+  } catch (err) {
+    $('catalog-meta').textContent = `Could not load the catalog: ${err}`;
+  }
+}
+
+async function loadCatalogRom(game) {
+  $('catalog-meta').textContent = `Downloading ${game.title}…`;
+  try {
+    const response = await fetch(game.hexUrl);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const extension = game.hexUrl.toLowerCase().includes('.arduboy') ? '.arduboy' : '.hex';
+    await loadRomBytes(`catalog:${game.id}${extension}`, new Uint8Array(await response.arrayBuffer()));
+    $('catalog-panel').hidden = true;
+  } catch (err) {
+    setStatus(`Could not fetch ${game.title}: ${err}`, true);
+    $('catalog-meta').textContent = `Download failed: ${err}`;
+  }
+}
+
 // ── State / EEPROM actions ────────────────────────────────────────────────
 async function saveState() {
   if (!running) return;
@@ -411,6 +493,10 @@ async function main() {
   wireTouch();
 
   $('file').addEventListener('change', (e) => { if (e.target.files[0]) loadRom(e.target.files[0]); });
+  $('catalog').addEventListener('click', openCatalog);
+  $('catalog-close').addEventListener('click', () => { $('catalog-panel').hidden = true; });
+  $('catalog-search').addEventListener('input', renderCatalog);
+  $('catalog-category').addEventListener('change', renderCatalog);
   $('fx').addEventListener('change', async (e) => {
     const f = e.target.files[0];
     if (!f) return;

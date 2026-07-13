@@ -28,6 +28,10 @@ Pages, Netlify, any static host).
 - Input: keyboard (**Arrows** = D-pad, **Z** = A, **X** = B) and **on-screen
   touch controls** (D-pad + A/B) for mobile; standard **Gamepad API** support
   (D-pad or left stick, A/X = A, B/Y = B)
+- **Online game catalog** from [eried/ArduboyCollection](https://github.com/eried/ArduboyCollection):
+  search by title/author, filter by category, and load supported ROMs directly.
+  The catalog JSON is generated weekly; ROMs and screenshots continue to be
+  fetched from the upstream project, with its game-specific license metadata.
 - Stereo audio via a single-threaded AudioWorklet (no SharedArrayBuffer, so no
   cross-origin isolation needed) with **volume** slider and **mute**
 - **Save states** (quick slot per ROM) and **EEPROM** auto-persistence, both
