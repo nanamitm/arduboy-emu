@@ -48,11 +48,12 @@ pub const INT_SPI: u16 = 0x0030;
 pub const INT_ADC: u16 = 0x003A;
 pub const INT_WDT: u16 = 0x0018;
 
-// Timer4 (32u4 only)
-pub const INT_TIMER4_OVF: u16 = 0x0048;
-pub const INT_TIMER4_COMPA: u16 = 0x004A;
-pub const INT_TIMER4_COMPB: u16 = 0x004C;
-pub const INT_TIMER4_COMPD: u16 = 0x004E;
+// Timer4 (32u4 only) — datasheet vectors 38–41 (word addr = vector × 2).
+// Note TWI (0x0048) and SPM READY (0x004A) sit between Timer3 OVF and Timer4.
+pub const INT_TIMER4_COMPA: u16 = 0x004C;
+pub const INT_TIMER4_COMPB: u16 = 0x004E;
+pub const INT_TIMER4_COMPD: u16 = 0x0050;
+pub const INT_TIMER4_OVF: u16 = 0x0052;
 
 // ─── ATmega328P interrupt vector addresses (word addresses) ────────────────
 

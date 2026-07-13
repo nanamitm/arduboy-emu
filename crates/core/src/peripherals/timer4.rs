@@ -48,11 +48,12 @@ pub struct Timer4 {
     ocf_d: u32,
 }
 
-/// Timer4 interrupt vector (word address)
-pub const INT_TIMER4_OVF: u16 = 0x0048;
-pub const INT_TIMER4_COMPA: u16 = 0x0038;
-pub const INT_TIMER4_COMPB: u16 = 0x003C;
-pub const INT_TIMER4_COMPD: u16 = 0x003E;
+/// Timer4 interrupt vectors (word addresses), per the ATmega32u4 datasheet:
+/// COMPA=vec38, COMPB=vec39, COMPD=vec40, OVF=vec41 (word addr = vector × 2).
+pub const INT_TIMER4_COMPA: u16 = 0x004C;
+pub const INT_TIMER4_COMPB: u16 = 0x004E;
+pub const INT_TIMER4_COMPD: u16 = 0x0050;
+pub const INT_TIMER4_OVF: u16 = 0x0052;
 
 impl Timer4 {
     pub fn new() -> Self {
@@ -389,5 +390,22 @@ impl Timer4 {
         self.ocf_a = s.ocf_a;
         self.ocf_b = s.ocf_b;
         self.ocf_d = s.ocf_d;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Regression guard: these were shifted by the TWI + SPM_READY gap, so a
+    // Timer4 overflow (as ArduboyPlaytune / digitized-sound games enable via
+    // TOIE4) dispatched to __bad_interrupt and reset the MCU. Word address =
+    // ATmega32u4 vector number × 2 (COMPA=38, COMPB=39, COMPD=40, OVF=41).
+    #[test]
+    fn timer4_vector_addresses_match_datasheet() {
+        assert_eq!(INT_TIMER4_COMPA, 0x004C);
+        assert_eq!(INT_TIMER4_COMPB, 0x004E);
+        assert_eq!(INT_TIMER4_COMPD, 0x0050);
+        assert_eq!(INT_TIMER4_OVF, 0x0052);
     }
 }
