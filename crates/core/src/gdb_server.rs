@@ -78,7 +78,9 @@ impl GdbServer {
         })
     }
 
-    pub fn port(&self) -> u16 { self.port }
+    pub fn port(&self) -> u16 {
+        self.port
+    }
 }
 
 impl GdbSession {
@@ -129,9 +131,13 @@ impl GdbSession {
                 buf.push_str(&format!("{:02x}{:02x}", sp & 0xFF, (sp >> 8) & 0xFF));
                 // PC: byte address, little-endian 4 bytes
                 let pc_byte = (pc as u32) * 2;
-                buf.push_str(&format!("{:02x}{:02x}{:02x}{:02x}",
-                    pc_byte & 0xFF, (pc_byte >> 8) & 0xFF,
-                    (pc_byte >> 16) & 0xFF, (pc_byte >> 24) & 0xFF));
+                buf.push_str(&format!(
+                    "{:02x}{:02x}{:02x}{:02x}",
+                    pc_byte & 0xFF,
+                    (pc_byte >> 8) & 0xFF,
+                    (pc_byte >> 16) & 0xFF,
+                    (pc_byte >> 24) & 0xFF
+                ));
                 self.send_packet(buf.as_bytes())?;
                 Ok(GdbAction::None)
             }
@@ -152,9 +158,13 @@ impl GdbSession {
                     33 => format!("{:02x}{:02x}", sp & 0xFF, (sp >> 8) & 0xFF),
                     34 => {
                         let pc_byte = (pc as u32) * 2;
-                        format!("{:02x}{:02x}{:02x}{:02x}",
-                            pc_byte & 0xFF, (pc_byte >> 8) & 0xFF,
-                            (pc_byte >> 16) & 0xFF, (pc_byte >> 24) & 0xFF)
+                        format!(
+                            "{:02x}{:02x}{:02x}{:02x}",
+                            pc_byte & 0xFF,
+                            (pc_byte >> 8) & 0xFF,
+                            (pc_byte >> 16) & 0xFF,
+                            (pc_byte >> 24) & 0xFF
+                        )
                     }
                     _ => "xx".into(),
                 };
@@ -178,11 +188,19 @@ impl GdbSession {
                         let a = addr + i;
                         let byte = if a < 0x800000 {
                             // Flash
-                            if a < flash.len() { flash[a] } else { 0xFF }
+                            if a < flash.len() {
+                                flash[a]
+                            } else {
+                                0xFF
+                            }
                         } else if a < 0x810000 {
                             // Data space
                             let da = a - 0x800000;
-                            if da < data.len() { data[da] } else { 0 }
+                            if da < data.len() {
+                                data[da]
+                            } else {
+                                0
+                            }
                         } else {
                             0xFF
                         };
@@ -209,7 +227,9 @@ impl GdbSession {
                             let a = addr + i;
                             if a >= 0x800000 && a < 0x810000 {
                                 let da = a - 0x800000;
-                                if da < data.len() { data[da] = b; }
+                                if da < data.len() {
+                                    data[da] = b;
+                                }
                             }
                         }
                         self.send_packet(b"OK")?;
@@ -223,14 +243,10 @@ impl GdbSession {
             }
 
             // Continue
-            'c' => {
-                Ok(GdbAction::Continue)
-            }
+            'c' => Ok(GdbAction::Continue),
 
             // Single step
-            's' => {
-                Ok(GdbAction::Step)
-            }
+            's' => Ok(GdbAction::Step),
 
             // Insert breakpoint: Z<type>,<addr>,<kind>
             'Z' => {
@@ -251,7 +267,9 @@ impl GdbSession {
                             // Write/read/access watchpoint — accept but track via breakpoints
                             self.send_packet(b"OK")?;
                         }
-                        _ => { self.send_packet(b"")?; }
+                        _ => {
+                            self.send_packet(b"")?;
+                        }
                     }
                 } else {
                     self.send_packet(b"E01")?;
@@ -274,7 +292,9 @@ impl GdbSession {
                         2 | 3 | 4 => {
                             self.send_packet(b"OK")?;
                         }
-                        _ => { self.send_packet(b"")?; }
+                        _ => {
+                            self.send_packet(b"")?;
+                        }
                     }
                 } else {
                     self.send_packet(b"E01")?;
@@ -365,7 +385,9 @@ impl GdbSession {
         self.buf.clear();
         loop {
             self.stream.read_exact(&mut byte)?;
-            if byte[0] == b'#' { break; }
+            if byte[0] == b'#' {
+                break;
+            }
             self.buf.push(byte[0]);
         }
 
@@ -467,6 +489,9 @@ mod tests {
 
     #[test]
     fn test_parse_hex_bytes() {
-        assert_eq!(parse_hex_bytes(b"48656C6C6F"), vec![0x48, 0x65, 0x6C, 0x6C, 0x6F]);
+        assert_eq!(
+            parse_hex_bytes(b"48656C6C6F"),
+            vec![0x48, 0x65, 0x6C, 0x6C, 0x6F]
+        );
     }
 }

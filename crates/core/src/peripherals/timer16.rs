@@ -89,12 +89,27 @@ impl Timer16 {
             ctc: false,
             wgm: [false; 4],
             cs: 0,
-            com_a: 0, com_b: 0, com_c: 0,
-            ocr_a: 0, ocr_b: 0, ocr_c: 0,
-            foc_a: false, foc_b: false, foc_c: false,
-            tov: 0, ocf_a: 0, ocf_b: 0, ocf_c: 0,
-            toie: false, ocie_a: false, ocie_b: false, ocie_c: false,
-            int_ov, int_compa, int_compb, int_compc,
+            com_a: 0,
+            com_b: 0,
+            com_c: 0,
+            ocr_a: 0,
+            ocr_b: 0,
+            ocr_c: 0,
+            foc_a: false,
+            foc_b: false,
+            foc_c: false,
+            tov: 0,
+            ocf_a: 0,
+            ocf_b: 0,
+            ocf_c: 0,
+            toie: false,
+            ocie_a: false,
+            ocie_b: false,
+            ocie_c: false,
+            int_ov,
+            int_compa,
+            int_compb,
+            int_compc,
             old_wgm: 0xFF,
         }
     }
@@ -105,22 +120,24 @@ impl Timer16 {
     }
 
     fn update_state(&mut self) {
-        let wgm = ((self.wgm[3] as u8) << 3) | ((self.wgm[2] as u8) << 2)
-            | ((self.wgm[1] as u8) << 1) | (self.wgm[0] as u8);
+        let wgm = ((self.wgm[3] as u8) << 3)
+            | ((self.wgm[2] as u8) << 2)
+            | ((self.wgm[1] as u8) << 1)
+            | (self.wgm[0] as u8);
         let cs = self.cs;
 
         if wgm != self.old_wgm {
             self.ctc = false;
             self.top = 0xFFFF;
             match wgm {
-                0 => {} // Normal
-                1 => self.top = 0xFF,     // PWM PC 8-bit
-                2 => self.top = 0x1FF,    // PWM PC 9-bit
-                3 => self.top = 0x3FF,    // PWM PC 10-bit
+                0 => {}                    // Normal
+                1 => self.top = 0xFF,      // PWM PC 8-bit
+                2 => self.top = 0x1FF,     // PWM PC 9-bit
+                3 => self.top = 0x3FF,     // PWM PC 10-bit
                 4 | 12 => self.ctc = true, // CTC
-                5 => self.top = 0xFF,     // Fast PWM 8-bit
-                6 => self.top = 0x1FF,    // Fast PWM 9-bit
-                7 => self.top = 0x3FF,    // Fast PWM 10-bit
+                5 => self.top = 0xFF,      // Fast PWM 8-bit
+                6 => self.top = 0x1FF,     // Fast PWM 9-bit
+                7 => self.top = 0x3FF,     // Fast PWM 10-bit
                 _ => {}
             }
             self.old_wgm = wgm;
@@ -140,10 +157,18 @@ impl Timer16 {
     pub fn write(&mut self, addr: u16, value: u8, _old: u8, data: &mut [u8]) -> bool {
         if addr == self.addrs.tifr {
             // Writing 1 to a TIFR bit CLEARS the interrupt flag
-            if value & 1 != 0 { self.tov = 0; }
-            if value & 2 != 0 { self.ocf_a = 0; }
-            if value & 4 != 0 { self.ocf_b = 0; }
-            if value & 8 != 0 { self.ocf_c = 0; }
+            if value & 1 != 0 {
+                self.tov = 0;
+            }
+            if value & 2 != 0 {
+                self.ocf_a = 0;
+            }
+            if value & 4 != 0 {
+                self.ocf_b = 0;
+            }
+            if value & 8 != 0 {
+                self.ocf_c = 0;
+            }
             return true;
         }
         if addr == self.addrs.tccr_a {
@@ -226,8 +251,8 @@ impl Timer16 {
         if addr == self.addrs.tifr {
             return Some(
                 ((self.tov.min(1)) as u8)
-                | (((self.ocf_a.min(1)) as u8) << 1)
-                | (((self.ocf_b.min(1)) as u8) << 2)
+                    | (((self.ocf_a.min(1)) as u8) << 1)
+                    | (((self.ocf_b.min(1)) as u8) << 2),
             );
         }
         if addr == self.addrs.tccr_c {
@@ -245,11 +270,15 @@ impl Timer16 {
     }
 
     fn do_update(&mut self, tick: u64) {
-        if self.prescale == 0 { return; }
+        if self.prescale == 0 {
+            return;
+        }
 
         let ticks_since = tick.wrapping_sub(self.tick);
         let interval = (ticks_since / self.prescale as u64) as u32;
-        if interval == 0 { return; }
+        if interval == 0 {
+            return;
+        }
         self.tick += (interval as u64) * (self.prescale as u64);
 
         let old_tcnt = self.tcnt;
@@ -340,8 +369,10 @@ impl Timer16 {
         if self.prescale == 0 || self.com_a != 1 {
             return 0.0;
         }
-        let wgm = ((self.wgm[3] as u8) << 3) | ((self.wgm[2] as u8) << 2)
-            | ((self.wgm[1] as u8) << 1) | (self.wgm[0] as u8);
+        let wgm = ((self.wgm[3] as u8) << 3)
+            | ((self.wgm[2] as u8) << 2)
+            | ((self.wgm[1] as u8) << 1)
+            | (self.wgm[0] as u8);
         // CTC modes: 4 (OCRnA), 12 (ICRn - not commonly used for tone)
         if wgm != 4 && wgm != 12 {
             return 0.0;
@@ -355,26 +386,60 @@ impl Timer16 {
     /// Capture state for save state.
     pub fn save_state(&self) -> crate::savestate::Timer16State {
         crate::savestate::Timer16State {
-            tick: self.tick, prescale: self.prescale, tcnt: self.tcnt,
-            top: self.top, ctc: self.ctc, wgm: self.wgm, cs: self.cs,
-            com_a: self.com_a, com_b: self.com_b, com_c: self.com_c,
-            ocr_a: self.ocr_a, ocr_b: self.ocr_b, ocr_c: self.ocr_c,
-            foc_a: self.foc_a, foc_b: self.foc_b, foc_c: self.foc_c,
-            tov: self.tov, ocf_a: self.ocf_a, ocf_b: self.ocf_b, ocf_c: self.ocf_c,
-            toie: self.toie, ocie_a: self.ocie_a, ocie_b: self.ocie_b, ocie_c: self.ocie_c,
+            tick: self.tick,
+            prescale: self.prescale,
+            tcnt: self.tcnt,
+            top: self.top,
+            ctc: self.ctc,
+            wgm: self.wgm,
+            cs: self.cs,
+            com_a: self.com_a,
+            com_b: self.com_b,
+            com_c: self.com_c,
+            ocr_a: self.ocr_a,
+            ocr_b: self.ocr_b,
+            ocr_c: self.ocr_c,
+            foc_a: self.foc_a,
+            foc_b: self.foc_b,
+            foc_c: self.foc_c,
+            tov: self.tov,
+            ocf_a: self.ocf_a,
+            ocf_b: self.ocf_b,
+            ocf_c: self.ocf_c,
+            toie: self.toie,
+            ocie_a: self.ocie_a,
+            ocie_b: self.ocie_b,
+            ocie_c: self.ocie_c,
             old_wgm: self.old_wgm,
         }
     }
 
     /// Restore state from save state.
     pub fn load_state(&mut self, s: &crate::savestate::Timer16State) {
-        self.tick = s.tick; self.prescale = s.prescale; self.tcnt = s.tcnt;
-        self.top = s.top; self.ctc = s.ctc; self.wgm = s.wgm; self.cs = s.cs;
-        self.com_a = s.com_a; self.com_b = s.com_b; self.com_c = s.com_c;
-        self.ocr_a = s.ocr_a; self.ocr_b = s.ocr_b; self.ocr_c = s.ocr_c;
-        self.foc_a = s.foc_a; self.foc_b = s.foc_b; self.foc_c = s.foc_c;
-        self.tov = s.tov; self.ocf_a = s.ocf_a; self.ocf_b = s.ocf_b; self.ocf_c = s.ocf_c;
-        self.toie = s.toie; self.ocie_a = s.ocie_a; self.ocie_b = s.ocie_b; self.ocie_c = s.ocie_c;
+        self.tick = s.tick;
+        self.prescale = s.prescale;
+        self.tcnt = s.tcnt;
+        self.top = s.top;
+        self.ctc = s.ctc;
+        self.wgm = s.wgm;
+        self.cs = s.cs;
+        self.com_a = s.com_a;
+        self.com_b = s.com_b;
+        self.com_c = s.com_c;
+        self.ocr_a = s.ocr_a;
+        self.ocr_b = s.ocr_b;
+        self.ocr_c = s.ocr_c;
+        self.foc_a = s.foc_a;
+        self.foc_b = s.foc_b;
+        self.foc_c = s.foc_c;
+        self.tov = s.tov;
+        self.ocf_a = s.ocf_a;
+        self.ocf_b = s.ocf_b;
+        self.ocf_c = s.ocf_c;
+        self.toie = s.toie;
+        self.ocie_a = s.ocie_a;
+        self.ocie_b = s.ocie_b;
+        self.ocie_c = s.ocie_c;
         self.old_wgm = s.old_wgm;
     }
 }

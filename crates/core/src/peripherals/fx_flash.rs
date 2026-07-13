@@ -16,9 +16,9 @@
 const FLASH_SIZE: usize = 16 * 1024 * 1024; // 16MB
 
 // JEDEC ID for W25Q128JV
-const JEDEC_MFR: u8 = 0xEF;     // Winbond
-const JEDEC_TYPE: u8 = 0x40;    // SPI
-const JEDEC_CAP: u8 = 0x18;     // 128Mbit = 16MB
+const JEDEC_MFR: u8 = 0xEF; // Winbond
+const JEDEC_TYPE: u8 = 0x40; // SPI
+const JEDEC_CAP: u8 = 0x18; // 128Mbit = 16MB
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum FxState {
@@ -99,12 +99,20 @@ impl FxFlash {
                 match mosi {
                     0x03 => {
                         // Read Data: 3 address bytes then continuous read
-                        self.state = FxState::ReadAddr { cmd: 0x03, addr_bytes: 0, addr: 0 };
+                        self.state = FxState::ReadAddr {
+                            cmd: 0x03,
+                            addr_bytes: 0,
+                            addr: 0,
+                        };
                         0xFF
                     }
                     0x0B => {
                         // Fast Read: 3 address bytes + 1 dummy then continuous read
-                        self.state = FxState::ReadAddr { cmd: 0x0B, addr_bytes: 0, addr: 0 };
+                        self.state = FxState::ReadAddr {
+                            cmd: 0x0B,
+                            addr_bytes: 0,
+                            addr: 0,
+                        };
                         0xFF
                     }
                     0x9F => {
@@ -140,12 +148,18 @@ impl FxFlash {
                     }
                     0x02 => {
                         // Page Program
-                        self.state = FxState::ProgAddr { addr_bytes: 0, addr: 0 };
+                        self.state = FxState::ProgAddr {
+                            addr_bytes: 0,
+                            addr: 0,
+                        };
                         0xFF
                     }
                     0x20 => {
                         // Sector Erase (4KB)
-                        self.state = FxState::EraseAddr { addr_bytes: 0, addr: 0 };
+                        self.state = FxState::EraseAddr {
+                            addr_bytes: 0,
+                            addr: 0,
+                        };
                         0xFF
                     }
                     _ => {
@@ -155,20 +169,32 @@ impl FxFlash {
                 }
             }
 
-            FxState::ReadAddr { cmd, addr_bytes, addr } => {
+            FxState::ReadAddr {
+                cmd,
+                addr_bytes,
+                addr,
+            } => {
                 let new_addr = (addr << 8) | mosi as u32;
                 let new_count = addr_bytes + 1;
                 if new_count >= 3 {
                     let masked = (new_addr as usize) % FLASH_SIZE;
                     if cmd == 0x0B {
                         // Fast Read needs 1 dummy byte
-                        self.state = FxState::ReadDummy { addr: masked as u32 };
+                        self.state = FxState::ReadDummy {
+                            addr: masked as u32,
+                        };
                     } else {
                         // Standard Read - start immediately
-                        self.state = FxState::Reading { addr: masked as u32 };
+                        self.state = FxState::Reading {
+                            addr: masked as u32,
+                        };
                     }
                 } else {
-                    self.state = FxState::ReadAddr { cmd, addr_bytes: new_count, addr: new_addr };
+                    self.state = FxState::ReadAddr {
+                        cmd,
+                        addr_bytes: new_count,
+                        addr: new_addr,
+                    };
                 }
                 0xFF
             }
@@ -186,7 +212,9 @@ impl FxFlash {
                     let idx = (addr as usize) % self.data.len();
                     self.data[idx]
                 };
-                self.state = FxState::Reading { addr: addr.wrapping_add(1) & (FLASH_SIZE as u32 - 1) };
+                self.state = FxState::Reading {
+                    addr: addr.wrapping_add(1) & (FLASH_SIZE as u32 - 1),
+                };
                 val
             }
 
@@ -197,14 +225,18 @@ impl FxFlash {
                     2 => JEDEC_CAP,
                     _ => 0x00,
                 };
-                self.state = FxState::JedecId { byte_idx: byte_idx + 1 };
+                self.state = FxState::JedecId {
+                    byte_idx: byte_idx + 1,
+                };
                 val
             }
 
             FxState::ReleasePD { byte_idx } => {
                 // 3 dummy bytes then device ID
                 let val = if byte_idx >= 3 { 0x17 } else { 0xFF };
-                self.state = FxState::ReleasePD { byte_idx: byte_idx + 1 };
+                self.state = FxState::ReleasePD {
+                    byte_idx: byte_idx + 1,
+                };
                 val
             }
 
@@ -219,9 +251,14 @@ impl FxFlash {
                 let new_count = addr_bytes + 1;
                 if new_count >= 3 {
                     let masked = (new_addr as usize) % FLASH_SIZE;
-                    self.state = FxState::Programming { addr: masked as u32 };
+                    self.state = FxState::Programming {
+                        addr: masked as u32,
+                    };
                 } else {
-                    self.state = FxState::ProgAddr { addr_bytes: new_count, addr: new_addr };
+                    self.state = FxState::ProgAddr {
+                        addr_bytes: new_count,
+                        addr: new_addr,
+                    };
                 }
                 0xFF
             }
@@ -254,7 +291,10 @@ impl FxFlash {
                     self.write_enabled = false;
                     self.state = FxState::Idle;
                 } else {
-                    self.state = FxState::EraseAddr { addr_bytes: new_count, addr: new_addr };
+                    self.state = FxState::EraseAddr {
+                        addr_bytes: new_count,
+                        addr: new_addr,
+                    };
                 }
                 0xFF
             }

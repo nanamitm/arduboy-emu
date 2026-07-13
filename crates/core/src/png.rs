@@ -32,7 +32,7 @@ pub fn encode_png(width: u32, height: u32, rgba: &[u8]) -> Vec<u8> {
         raw.push(0); // filter: None
         for x in 0..width as usize {
             let offset = (y * width as usize + x) * 4;
-            raw.push(rgba[offset]);     // R
+            raw.push(rgba[offset]); // R
             raw.push(rgba[offset + 1]); // G
             raw.push(rgba[offset + 2]); // B
         }
@@ -63,7 +63,9 @@ pub fn encode_png_mono(width: u32, height: u32, pixels: &[bool]) -> Vec<u8> {
     ihdr.extend_from_slice(&height.to_be_bytes());
     ihdr.push(8); // bit depth
     ihdr.push(0); // color type: grayscale
-    ihdr.push(0); ihdr.push(0); ihdr.push(0);
+    ihdr.push(0);
+    ihdr.push(0);
+    ihdr.push(0);
     write_chunk(&mut png, b"IHDR", &ihdr);
 
     // Build filtered data
@@ -72,7 +74,11 @@ pub fn encode_png_mono(width: u32, height: u32, pixels: &[bool]) -> Vec<u8> {
     for y in 0..height as usize {
         raw.push(0); // filter: None
         for x in 0..width as usize {
-            raw.push(if pixels[y * width as usize + x] { 255 } else { 0 });
+            raw.push(if pixels[y * width as usize + x] {
+                255
+            } else {
+                0
+            });
         }
     }
 

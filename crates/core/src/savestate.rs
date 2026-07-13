@@ -18,7 +18,7 @@
 //! +------------------+
 //! ```
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 /// Magic bytes identifying an arduboy-emu save state file.
@@ -236,8 +236,7 @@ pub struct SaveState {
 /// This is the same container [`save_to_file`] writes, so blobs are
 /// interchangeable between the desktop (file) and web (IndexedDB/bytes) paths.
 pub fn save_to_bytes(state: &SaveState, cpu_type_byte: u8) -> Result<Vec<u8>, String> {
-    let payload = bincode::serialize(state)
-        .map_err(|e| format!("Serialize error: {}", e))?;
+    let payload = bincode::serialize(state).map_err(|e| format!("Serialize error: {}", e))?;
 
     let compressed = miniz_oxide::deflate::compress_to_vec(&payload, 6);
 
@@ -260,22 +259,25 @@ pub fn load_from_bytes(data: &[u8], expected_cpu_type: u8) -> Result<SaveState, 
     }
     let version = u32::from_le_bytes([data[4], data[5], data[6], data[7]]);
     if version != FORMAT_VERSION {
-        return Err(format!("Unsupported save state version {} (expected {})",
-            version, FORMAT_VERSION));
+        return Err(format!(
+            "Unsupported save state version {} (expected {})",
+            version, FORMAT_VERSION
+        ));
     }
     let cpu_type = data[8];
     if cpu_type != expected_cpu_type {
         let names = ["ATmega32u4", "ATmega328P"];
-        return Err(format!("CPU type mismatch: save={} current={}",
+        return Err(format!(
+            "CPU type mismatch: save={} current={}",
             names.get(cpu_type as usize).unwrap_or(&"?"),
-            names.get(expected_cpu_type as usize).unwrap_or(&"?")));
+            names.get(expected_cpu_type as usize).unwrap_or(&"?")
+        ));
     }
 
     let decompressed = miniz_oxide::inflate::decompress_to_vec(&data[9..])
         .map_err(|e| format!("Decompress error: {:?}", e))?;
 
-    bincode::deserialize(&decompressed)
-        .map_err(|e| format!("Deserialize error: {}", e))
+    bincode::deserialize(&decompressed).map_err(|e| format!("Deserialize error: {}", e))
 }
 
 // ─── File I/O ───────────────────────────────────────────────────────────────
@@ -283,14 +285,12 @@ pub fn load_from_bytes(data: &[u8], expected_cpu_type: u8) -> Result<SaveState, 
 /// Save state to file with header and deflate compression.
 pub fn save_to_file(state: &SaveState, cpu_type_byte: u8, path: &Path) -> Result<(), String> {
     let out = save_to_bytes(state, cpu_type_byte)?;
-    std::fs::write(path, &out)
-        .map_err(|e| format!("Write error: {}", e))
+    std::fs::write(path, &out).map_err(|e| format!("Write error: {}", e))
 }
 
 /// Load state from file, verifying magic, version, and CPU type.
 pub fn load_from_file(path: &Path, expected_cpu_type: u8) -> Result<SaveState, String> {
-    let data = std::fs::read(path)
-        .map_err(|e| format!("Read error: {}", e))?;
+    let data = std::fs::read(path).map_err(|e| format!("Read error: {}", e))?;
     load_from_bytes(&data, expected_cpu_type)
 }
 
@@ -300,5 +300,7 @@ pub fn state_path(game_path: &str) -> String {
     let p = Path::new(game_path);
     let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("game");
     let dir = p.parent().unwrap_or(Path::new("."));
-    dir.join(format!("{}.state", stem)).to_string_lossy().into_owned()
+    dir.join(format!("{}.state", stem))
+        .to_string_lossy()
+        .into_owned()
 }

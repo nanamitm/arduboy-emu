@@ -62,7 +62,10 @@ pub struct ChannelBuffer {
 
 impl ChannelBuffer {
     pub fn new() -> Self {
-        ChannelBuffer { edges: Vec::with_capacity(4096), level: false }
+        ChannelBuffer {
+            edges: Vec::with_capacity(4096),
+            level: false,
+        }
     }
 
     /// Record a pin transition.
@@ -80,10 +83,14 @@ impl ChannelBuffer {
     }
 
     /// Number of edges recorded this frame.
-    pub fn len(&self) -> usize { self.edges.len() }
+    pub fn len(&self) -> usize {
+        self.edges.len()
+    }
 
     /// Access the raw edge slice.
-    pub fn edges(&self) -> &[AudioEdge] { &self.edges }
+    pub fn edges(&self) -> &[AudioEdge] {
+        &self.edges
+    }
 }
 
 // ─── 2nd-order biquad IIR filter ────────────────────────────────────────────
@@ -287,10 +294,12 @@ impl AudioBuffer {
         }
 
         let frame_ticks = self.frame_end.saturating_sub(self.frame_start);
-        if frame_ticks == 0 { return 0; }
+        if frame_ticks == 0 {
+            return 0;
+        }
 
-        let num_samples = ((frame_ticks as f64 * sample_rate as f64) / clock_hz as f64)
-            .ceil() as usize;
+        let num_samples =
+            ((frame_ticks as f64 * sample_rate as f64) / clock_hz as f64).ceil() as usize;
         out.clear();
         out.reserve(num_samples * 2);
 
@@ -333,19 +342,21 @@ impl AudioBuffer {
             // ── Left channel: PWM DAC or edge-based ──
             let l_raw = if use_pwm {
                 Self::sample_pwm(
-                    &mut pwm_i, &self.pwm_samples, &mut self.pwm_level,
-                    p_start, p_end, tps, volume,
+                    &mut pwm_i,
+                    &self.pwm_samples,
+                    &mut self.pwm_level,
+                    p_start,
+                    p_end,
+                    tps,
+                    volume,
                 )
             } else {
-                Self::sample_channel(
-                    &mut li, l_edges, &mut l_level, p_start, p_end, tps, volume,
-                )
+                Self::sample_channel(&mut li, l_edges, &mut l_level, p_start, p_end, tps, volume)
             };
 
             // ── Right channel: always edge-based ──
-            let r_raw = Self::sample_channel(
-                &mut ri, r_edges, &mut r_level, p_start, p_end, tps, volume,
-            );
+            let r_raw =
+                Self::sample_channel(&mut ri, r_edges, &mut r_level, p_start, p_end, tps, volume);
 
             if apply_post {
                 // (1) Click suppression: per-channel envelope

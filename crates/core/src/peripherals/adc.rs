@@ -24,8 +24,12 @@ pub struct Adc {
 impl Adc {
     pub fn new() -> Self {
         Adc {
-            aden: false, adsc: false, adie: false, adif: false,
-            adch: 0, adcl: 0,
+            aden: false,
+            adsc: false,
+            adie: false,
+            adif: false,
+            adch: 0,
+            adcl: 0,
         }
     }
 
@@ -56,10 +60,18 @@ impl Adc {
             ADCSRA => {
                 // Reconstruct ADCSRA register from internal state
                 let mut val = 0u8;
-                if self.aden { val |= 0x80; }
-                if self.adsc { val |= 0x40; }
-                if self.adif { val |= 0x10; }
-                if self.adie { val |= 0x08; }
+                if self.aden {
+                    val |= 0x80;
+                }
+                if self.adsc {
+                    val |= 0x40;
+                }
+                if self.adif {
+                    val |= 0x10;
+                }
+                if self.adie {
+                    val |= 0x08;
+                }
                 Some(val)
             }
             ADCH => Some(self.adch),
@@ -88,15 +100,23 @@ impl Adc {
     /// Capture state for save state.
     pub fn save_state(&self) -> crate::savestate::AdcState {
         crate::savestate::AdcState {
-            aden: self.aden, adsc: self.adsc, adie: self.adie, adif: self.adif,
-            adch: self.adch, adcl: self.adcl,
+            aden: self.aden,
+            adsc: self.adsc,
+            adie: self.adie,
+            adif: self.adif,
+            adch: self.adch,
+            adcl: self.adcl,
         }
     }
 
     /// Restore state from save state.
     pub fn load_state(&mut self, s: &crate::savestate::AdcState) {
-        self.aden = s.aden; self.adsc = s.adsc; self.adie = s.adie; self.adif = s.adif;
-        self.adch = s.adch; self.adcl = s.adcl;
+        self.aden = s.aden;
+        self.adsc = s.adsc;
+        self.adie = s.adie;
+        self.adif = s.adif;
+        self.adch = s.adch;
+        self.adcl = s.adcl;
     }
 }
 

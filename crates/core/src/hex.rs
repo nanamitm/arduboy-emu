@@ -13,7 +13,9 @@ pub fn parse_hex(hex: &str, flash: &mut [u8]) -> Result<usize, String> {
 
     for line in hex.lines() {
         let line = line.trim();
-        if line.is_empty() { continue; }
+        if line.is_empty() {
+            continue;
+        }
         if !line.starts_with(':') {
             continue; // skip non-hex lines
         }
@@ -111,7 +113,7 @@ mod tests {
 
     #[test]
     fn test_parse_simple_hex() {
-        let hex = ":100000000C9434000C944E000C944E000C944E00A4\n:00000001FF\n";
+        let hex = ":100000000C9434000C944E000C944E000C944E0052\n:00000001FF\n";
         let mut flash = vec![0u8; 32768];
         let size = parse_hex(hex, &mut flash).unwrap();
         assert_eq!(size, 16);

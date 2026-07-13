@@ -63,13 +63,22 @@ impl Timer8 {
             prescale: 0,
             cs: 0,
             mode: 0,
-            wgm00: false, wgm01: false, wgm02: false,
-            com_a: 0, com_b: 0,
-            ocr0a: 0, ocr0b: 0,
+            wgm00: false,
+            wgm01: false,
+            wgm02: false,
+            com_a: 0,
+            com_b: 0,
+            ocr0a: 0,
+            ocr0b: 0,
             tcnt_shadow: 0,
-            tov0: 0, ocf0a: 0, ocf0b: 0,
-            toie0: false, ocie0a: false, ocie0b: false,
-            dbg_ovf_count: 0, dbg_int_fire_count: 0,
+            tov0: 0,
+            ocf0a: 0,
+            ocf0b: 0,
+            toie0: false,
+            ocie0a: false,
+            ocie0b: false,
+            dbg_ovf_count: 0,
+            dbg_int_fire_count: 0,
         }
     }
 
@@ -81,14 +90,14 @@ impl Timer8 {
         self.prescale = if self.addrs.is_timer2 {
             // Timer2 (ATmega328P async timer) — different prescaler table
             match self.cs {
-                0 => 0,       // stopped
-                1 => 1,       // clk/1
-                2 => 8,       // clk/8
-                3 => 32,      // clk/32
-                4 => 64,      // clk/64
-                5 => 128,     // clk/128
-                6 => 256,     // clk/256
-                7 => 1024,    // clk/1024
+                0 => 0,    // stopped
+                1 => 1,    // clk/1
+                2 => 8,    // clk/8
+                3 => 32,   // clk/32
+                4 => 64,   // clk/64
+                5 => 128,  // clk/128
+                6 => 256,  // clk/256
+                7 => 1024, // clk/1024
                 _ => 0,
             }
         } else {
@@ -100,7 +109,7 @@ impl Timer8 {
                 3 => 64,
                 4 => 256,
                 5 => 1024,
-                _ => 0,  // external clock (not emulated)
+                _ => 0, // external clock (not emulated)
             }
         };
         let wgm = ((self.wgm02 as u8) << 2) | ((self.wgm01 as u8) << 1) | (self.wgm00 as u8);
@@ -111,9 +120,15 @@ impl Timer8 {
     pub fn write(&mut self, addr: u16, value: u8, _old: u8, data: &mut [u8]) -> bool {
         if addr == self.addrs.tifr {
             // Writing 1 to a TIFR bit CLEARS the interrupt flag
-            if value & 1 != 0 { self.tov0 = 0; }
-            if value & 2 != 0 { self.ocf0a = 0; }
-            if value & 4 != 0 { self.ocf0b = 0; }
+            if value & 1 != 0 {
+                self.tov0 = 0;
+            }
+            if value & 2 != 0 {
+                self.ocf0a = 0;
+            }
+            if value & 4 != 0 {
+                self.ocf0b = 0;
+            }
             return true;
         }
         if addr == self.addrs.tccr_a {
@@ -162,8 +177,8 @@ impl Timer8 {
         if addr == self.addrs.tifr {
             return Some(
                 ((self.tov0.min(1)) as u8)
-                | (((self.ocf0a.min(1)) as u8) << 1)
-                | (((self.ocf0b.min(1)) as u8) << 2)
+                    | (((self.ocf0a.min(1)) as u8) << 1)
+                    | (((self.ocf0b.min(1)) as u8) << 2),
             );
         }
         if addr == self.addrs.tcnt {
@@ -174,26 +189,44 @@ impl Timer8 {
     }
 
     fn do_update(&mut self, tick: u64, _data: &[u8]) {
-        if self.prescale == 0 { return; }
+        if self.prescale == 0 {
+            return;
+        }
         let ticks_since = tick.wrapping_sub(self.tick);
         let interval = (ticks_since / self.prescale as u64) as u32;
-        if interval == 0 { return; }
+        if interval == 0 {
+            return;
+        }
 
         let top = if self.mode == 2 || self.mode == 7 {
-            if self.ocr0a > 0 { self.ocr0a as u32 } else { 0xFF }
-        } else { 0xFF };
+            if self.ocr0a > 0 {
+                self.ocr0a as u32
+            } else {
+                0xFF
+            }
+        } else {
+            0xFF
+        };
 
         let new_cnt = self.tcnt_shadow as u32 + interval;
-        self.tcnt_shadow = if top > 0 { (new_cnt % (top + 1)) as u8 } else { new_cnt as u8 };
+        self.tcnt_shadow = if top > 0 {
+            (new_cnt % (top + 1)) as u8
+        } else {
+            new_cnt as u8
+        };
     }
 
     /// Update timer state
     pub fn update(&mut self, tick: u64, data: &mut [u8]) {
-        if self.prescale == 0 { return; }
+        if self.prescale == 0 {
+            return;
+        }
 
         let ticks_since = tick.wrapping_sub(self.tick);
         let interval = (ticks_since / self.prescale as u64) as u32;
-        if interval == 0 { return; }
+        if interval == 0 {
+            return;
+        }
 
         let old_cnt = self.tcnt_shadow as u32;
         let new_cnt = old_cnt + interval;
@@ -201,7 +234,11 @@ impl Timer8 {
         // WGM mode determines TOP value
         let top = if self.mode == 2 || self.mode == 7 {
             // CTC mode (WGM=010) or Fast PWM with OCRA top (WGM=111)
-            if self.ocr0a > 0 { self.ocr0a as u32 } else { 0xFF }
+            if self.ocr0a > 0 {
+                self.ocr0a as u32
+            } else {
+                0xFF
+            }
         } else {
             0xFF // Normal mode
         };
@@ -269,9 +306,19 @@ impl Timer8 {
     }
 
     pub fn dbg_info(&self) -> String {
-        format!("mode={} cs={} ps={} ocra={} ocie_a={} ocf_a={} toie={} tov={} cnt={} int_fires={}",
-            self.mode, self.cs, self.prescale, self.ocr0a, self.ocie0a, self.ocf0a,
-            self.toie0, self.tov0, self.tcnt_shadow, self.dbg_int_fire_count)
+        format!(
+            "mode={} cs={} ps={} ocra={} ocie_a={} ocf_a={} toie={} tov={} cnt={} int_fires={}",
+            self.mode,
+            self.cs,
+            self.prescale,
+            self.ocr0a,
+            self.ocie0a,
+            self.ocf0a,
+            self.toie0,
+            self.tov0,
+            self.tcnt_shadow,
+            self.dbg_int_fire_count
+        )
     }
 
     pub fn dbg_reset_counters(&mut self) {
@@ -304,7 +351,9 @@ impl Timer8 {
     /// hardware PWM output on OC2B (PD3 for Timer2). Used for Gamebuino Classic
     /// sound where Timer1 ISR updates OCR2B to produce audio via PWM DAC.
     pub fn is_pwm_dac_active(&self) -> bool {
-        self.com_b != 0 && self.prescale > 0 && (self.mode == 1 || self.mode == 3 || self.mode == 5 || self.mode == 7)
+        self.com_b != 0
+            && self.prescale > 0
+            && (self.mode == 1 || self.mode == 3 || self.mode == 5 || self.mode == 7)
     }
 
     /// Get current OCR_B value (PWM DAC level, 0–255).
@@ -315,22 +364,46 @@ impl Timer8 {
     /// Capture state for save state.
     pub fn save_state(&self) -> crate::savestate::Timer8State {
         crate::savestate::Timer8State {
-            tick: self.tick, prescale: self.prescale, cs: self.cs, mode: self.mode,
-            wgm00: self.wgm00, wgm01: self.wgm01, wgm02: self.wgm02,
-            com_a: self.com_a, com_b: self.com_b,
-            ocr0a: self.ocr0a, ocr0b: self.ocr0b, tcnt_shadow: self.tcnt_shadow,
-            tov0: self.tov0, ocf0a: self.ocf0a, ocf0b: self.ocf0b,
-            toie0: self.toie0, ocie0a: self.ocie0a, ocie0b: self.ocie0b,
+            tick: self.tick,
+            prescale: self.prescale,
+            cs: self.cs,
+            mode: self.mode,
+            wgm00: self.wgm00,
+            wgm01: self.wgm01,
+            wgm02: self.wgm02,
+            com_a: self.com_a,
+            com_b: self.com_b,
+            ocr0a: self.ocr0a,
+            ocr0b: self.ocr0b,
+            tcnt_shadow: self.tcnt_shadow,
+            tov0: self.tov0,
+            ocf0a: self.ocf0a,
+            ocf0b: self.ocf0b,
+            toie0: self.toie0,
+            ocie0a: self.ocie0a,
+            ocie0b: self.ocie0b,
         }
     }
 
     /// Restore state from save state.
     pub fn load_state(&mut self, s: &crate::savestate::Timer8State) {
-        self.tick = s.tick; self.prescale = s.prescale; self.cs = s.cs; self.mode = s.mode;
-        self.wgm00 = s.wgm00; self.wgm01 = s.wgm01; self.wgm02 = s.wgm02;
-        self.com_a = s.com_a; self.com_b = s.com_b;
-        self.ocr0a = s.ocr0a; self.ocr0b = s.ocr0b; self.tcnt_shadow = s.tcnt_shadow;
-        self.tov0 = s.tov0; self.ocf0a = s.ocf0a; self.ocf0b = s.ocf0b;
-        self.toie0 = s.toie0; self.ocie0a = s.ocie0a; self.ocie0b = s.ocie0b;
+        self.tick = s.tick;
+        self.prescale = s.prescale;
+        self.cs = s.cs;
+        self.mode = s.mode;
+        self.wgm00 = s.wgm00;
+        self.wgm01 = s.wgm01;
+        self.wgm02 = s.wgm02;
+        self.com_a = s.com_a;
+        self.com_b = s.com_b;
+        self.ocr0a = s.ocr0a;
+        self.ocr0b = s.ocr0b;
+        self.tcnt_shadow = s.tcnt_shadow;
+        self.tov0 = s.tov0;
+        self.ocf0a = s.ocf0a;
+        self.ocf0b = s.ocf0b;
+        self.toie0 = s.toie0;
+        self.ocie0a = s.ocie0a;
+        self.ocie0b = s.ocie0b;
     }
 }

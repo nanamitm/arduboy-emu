@@ -5,7 +5,7 @@
 //! Supports basic and extended instruction sets, horizontal/vertical
 //! addressing, and contrast/bias configuration commands.
 
-use crate::{SCREEN_WIDTH, SCREEN_HEIGHT};
+use crate::{SCREEN_HEIGHT, SCREEN_WIDTH};
 
 const FB_SIZE: usize = SCREEN_WIDTH * SCREEN_HEIGHT * 4; // RGBA
 const PCD_WIDTH: usize = 84;
@@ -60,7 +60,7 @@ impl Pcd8544 {
 
     pub fn receive_command(&mut self, byte: u8) {
         self.dbg_cmd_count += 1;
-        
+
         if self.extended_mode {
             // Extended instruction set (H=1)
             if byte & 0x80 != 0 {
@@ -142,11 +142,13 @@ impl Pcd8544 {
 
     /// Render VRAM to the 128x64 framebuffer (centered, 1:1 pixel mapping)
     pub fn render_to_framebuffer(&mut self) {
-        if !self.dirty { return; }
+        if !self.dirty {
+            return;
+        }
         self.dirty = false;
 
         let inverse = self.display_mode == 5;
-        
+
         // Center 84x48 in 128x64: offset_x = (128-84)/2 = 22, offset_y = (64-48)/2 = 8
         let off_x = (SCREEN_WIDTH - PCD_WIDTH) / 2;
         let off_y = (SCREEN_HEIGHT - PCD_HEIGHT) / 2;
@@ -192,9 +194,12 @@ impl Pcd8544 {
         crate::savestate::Pcd8544State {
             framebuffer: self.framebuffer.to_vec(),
             vram: self.vram.to_vec(),
-            x_addr: self.x_addr, y_addr: self.y_addr,
-            extended_mode: self.extended_mode, display_mode: self.display_mode,
-            power_down: self.power_down, vertical_addressing: self.vertical_addressing,
+            x_addr: self.x_addr,
+            y_addr: self.y_addr,
+            extended_mode: self.extended_mode,
+            display_mode: self.display_mode,
+            power_down: self.power_down,
+            vertical_addressing: self.vertical_addressing,
         }
     }
 
@@ -204,9 +209,12 @@ impl Pcd8544 {
         self.framebuffer[..fb_len].copy_from_slice(&s.framebuffer[..fb_len]);
         let vram_len = s.vram.len().min(self.vram.len());
         self.vram[..vram_len].copy_from_slice(&s.vram[..vram_len]);
-        self.x_addr = s.x_addr; self.y_addr = s.y_addr;
-        self.extended_mode = s.extended_mode; self.display_mode = s.display_mode;
-        self.power_down = s.power_down; self.vertical_addressing = s.vertical_addressing;
+        self.x_addr = s.x_addr;
+        self.y_addr = s.y_addr;
+        self.extended_mode = s.extended_mode;
+        self.display_mode = s.display_mode;
+        self.power_down = s.power_down;
+        self.vertical_addressing = s.vertical_addressing;
         self.dirty = true;
     }
 }

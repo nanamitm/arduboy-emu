@@ -333,8 +333,8 @@ pub fn decode(word: u16, next_word: u16) -> (Instruction, u8) {
             let q = (((word >> 13) & 1) << 5) | (((word >> 10) & 3) << 3) | (word & 7);
             let q = q as u8;
             let d_r = ((word >> 4) & 0x1F) as u8;
-            let is_store = word & 0x0200 != 0;  // bit 9
-            let is_y = word & 0x0008 != 0;       // bit 3
+            let is_store = word & 0x0200 != 0; // bit 9
+            let is_y = word & 0x0008 != 0; // bit 3
 
             if is_y {
                 if !is_store {
@@ -378,10 +378,22 @@ pub fn decode(word: u16, next_word: u16) -> (Instruction, u8) {
             let a = (((word >> 9) & 3) << 4 | (word & 0xF)) as u8;
             if word & 0x0800 == 0 {
                 // IN
-                return (Instruction::In { d: d_r, a: a + 0x20 }, 1); // convert I/O addr to data space
+                return (
+                    Instruction::In {
+                        d: d_r,
+                        a: a + 0x20,
+                    },
+                    1,
+                ); // convert I/O addr to data space
             } else {
                 // OUT
-                return (Instruction::Out { a: a + 0x20, r: d_r }, 1);
+                return (
+                    Instruction::Out {
+                        a: a + 0x20,
+                        r: d_r,
+                    },
+                    1,
+                );
             }
         }
 
@@ -646,7 +658,10 @@ mod tests {
     fn test_decode_add() {
         let (inst, _) = decode(0x0C01, 0);
         match inst {
-            Instruction::Add { d, r } => { assert_eq!(d, 0); assert_eq!(r, 1); }
+            Instruction::Add { d, r } => {
+                assert_eq!(d, 0);
+                assert_eq!(r, 1);
+            }
             _ => panic!("Expected Add, got {:?}", inst),
         }
     }

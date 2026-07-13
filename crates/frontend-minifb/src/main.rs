@@ -25,15 +25,17 @@
 //! - LCD effect (L key): display-accurate colors, pixel grid, ghosting, dot rounding
 //! - Profiler toggle (T key) in GUI mode
 
-use arduboy_core::{Arduboy, Button, CpuType, DisplayType, SCREEN_WIDTH, SCREEN_HEIGHT, detect_cpu_type};
-use minifb::{Key, Window, WindowOptions, Scale, ScaleMode};
-use gilrs::{Gilrs, Event as GilrsEvent, EventType, Axis, Button as GilrsButton};
+use arduboy_core::{
+    detect_cpu_type, Arduboy, Button, CpuType, DisplayType, SCREEN_HEIGHT, SCREEN_WIDTH,
+};
+use gilrs::{Axis, Button as GilrsButton, Event as GilrsEvent, EventType, Gilrs};
+use minifb::{Key, Scale, ScaleMode, Window, WindowOptions};
 use std::env;
 use std::fs;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicU32, Ordering};
-use std::time::{Duration, Instant};
 use std::io::Write;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 /// Audio output sample rate in Hz
 const AUDIO_SAMPLE_RATE: u32 = 44100;
@@ -67,8 +69,13 @@ impl HybridAudioSource {
         sample_rate: u32,
     ) -> Self {
         HybridAudioSource {
-            ring, freq_l, freq_r, sample_rate,
-            phase_l: 0.0, phase_r: 0.0, left_next: true,
+            ring,
+            freq_l,
+            freq_r,
+            sample_rate,
+            phase_l: 0.0,
+            phase_r: 0.0,
+            left_next: true,
         }
     }
 }
@@ -86,16 +93,30 @@ impl Iterator for HybridAudioSource {
         if self.left_next {
             self.left_next = false;
             let freq = f32::from_bits(self.freq_l.load(Ordering::Relaxed));
-            if freq <= 0.0 { self.phase_l = 0.0; return Some(0.0); }
-            let s = if self.phase_l < 0.5 { AUDIO_VOLUME } else { -AUDIO_VOLUME };
+            if freq <= 0.0 {
+                self.phase_l = 0.0;
+                return Some(0.0);
+            }
+            let s = if self.phase_l < 0.5 {
+                AUDIO_VOLUME
+            } else {
+                -AUDIO_VOLUME
+            };
             self.phase_l += freq / self.sample_rate as f32;
             self.phase_l %= 1.0;
             Some(s)
         } else {
             self.left_next = true;
             let freq = f32::from_bits(self.freq_r.load(Ordering::Relaxed));
-            if freq <= 0.0 { self.phase_r = 0.0; return Some(0.0); }
-            let s = if self.phase_r < 0.5 { AUDIO_VOLUME } else { -AUDIO_VOLUME };
+            if freq <= 0.0 {
+                self.phase_r = 0.0;
+                return Some(0.0);
+            }
+            let s = if self.phase_r < 0.5 {
+                AUDIO_VOLUME
+            } else {
+                -AUDIO_VOLUME
+            };
             self.phase_r += freq / self.sample_rate as f32;
             self.phase_r %= 1.0;
             Some(s)
@@ -104,52 +125,82 @@ impl Iterator for HybridAudioSource {
 }
 
 impl rodio::Source for HybridAudioSource {
-    fn current_frame_len(&self) -> Option<usize> { None }
-    fn channels(&self) -> u16 { 2 }
-    fn sample_rate(&self) -> u32 { self.sample_rate }
-    fn total_duration(&self) -> Option<Duration> { None }
+    fn current_frame_len(&self) -> Option<usize> {
+        None
+    }
+    fn channels(&self) -> u16 {
+        2
+    }
+    fn sample_rate(&self) -> u32 {
+        self.sample_rate
+    }
+    fn total_duration(&self) -> Option<Duration> {
+        None
+    }
 }
 
 fn setup_audio(
     ring: Arc<std::sync::Mutex<std::collections::VecDeque<f32>>>,
     freq_l: Arc<AtomicU32>,
     freq_r: Arc<AtomicU32>,
-) -> Option<(rodio::OutputStream, rodio::OutputStreamHandle, rodio::Sink)>
-{
+) -> Option<(rodio::OutputStream, rodio::OutputStreamHandle, rodio::Sink)> {
     match rodio::OutputStream::try_default() {
-        Ok((stream, handle)) => {
-            match rodio::Sink::try_new(&handle) {
-                Ok(sink) => {
-                    let source = HybridAudioSource::new(ring, freq_l, freq_r, AUDIO_SAMPLE_RATE);
-                    sink.append(source);
-                    Some((stream, handle, sink))
-                }
-                Err(e) => { eprintln!("Warning: audio sink: {}", e); None }
+        Ok((stream, handle)) => match rodio::Sink::try_new(&handle) {
+            Ok(sink) => {
+                let source = HybridAudioSource::new(ring, freq_l, freq_r, AUDIO_SAMPLE_RATE);
+                sink.append(source);
+                Some((stream, handle, sink))
             }
+            Err(e) => {
+                eprintln!("Warning: audio sink: {}", e);
+                None
+            }
+        },
+        Err(e) => {
+            eprintln!("Warning: audio device: {}", e);
+            None
         }
-        Err(e) => { eprintln!("Warning: audio device: {}", e); None }
     }
 }
 
 // ─── Gamepad ────────────────────────────────────────────────────────────────
 
 struct GamepadState {
-    up: bool, down: bool, left: bool, right: bool,
-    a: bool, b: bool,
-    left_stick_x: f32, left_stick_y: f32,
+    up: bool,
+    down: bool,
+    left: bool,
+    right: bool,
+    a: bool,
+    b: bool,
+    left_stick_x: f32,
+    left_stick_y: f32,
 }
 
 impl GamepadState {
     fn new() -> Self {
         GamepadState {
-            up: false, down: false, left: false, right: false,
-            a: false, b: false, left_stick_x: 0.0, left_stick_y: 0.0,
+            up: false,
+            down: false,
+            left: false,
+            right: false,
+            a: false,
+            b: false,
+            left_stick_x: 0.0,
+            left_stick_y: 0.0,
         }
     }
-    fn eff_up(&self)    -> bool { self.up    || self.left_stick_y < -STICK_DEADZONE }
-    fn eff_down(&self)  -> bool { self.down  || self.left_stick_y >  STICK_DEADZONE }
-    fn eff_left(&self)  -> bool { self.left  || self.left_stick_x < -STICK_DEADZONE }
-    fn eff_right(&self) -> bool { self.right || self.left_stick_x >  STICK_DEADZONE }
+    fn eff_up(&self) -> bool {
+        self.up || self.left_stick_y < -STICK_DEADZONE
+    }
+    fn eff_down(&self) -> bool {
+        self.down || self.left_stick_y > STICK_DEADZONE
+    }
+    fn eff_left(&self) -> bool {
+        self.left || self.left_stick_x < -STICK_DEADZONE
+    }
+    fn eff_right(&self) -> bool {
+        self.right || self.left_stick_x > STICK_DEADZONE
+    }
 }
 
 fn init_gamepad(debug: bool) -> Option<Gilrs> {
@@ -161,11 +212,16 @@ fn init_gamepad(debug: bool) -> Option<Gilrs> {
                     println!("Gamepad: [{}] \"{}\" ({})", id, gp.name(), gp.os_name());
                     found = true;
                 }
-                if !found { println!("No gamepad (hot-plug supported)."); }
+                if !found {
+                    println!("No gamepad (hot-plug supported).");
+                }
             }
             Some(gilrs)
         }
-        Err(e) => { eprintln!("Warning: gamepad: {}", e); None }
+        Err(e) => {
+            eprintln!("Warning: gamepad: {}", e);
+            None
+        }
     }
 }
 
@@ -173,26 +229,40 @@ fn poll_gamepad(gilrs: &mut Gilrs, state: &mut GamepadState, debug: bool) {
     while let Some(GilrsEvent { event, id, .. }) = gilrs.next_event() {
         if debug {
             match &event {
-                EventType::ButtonPressed(b, code)  => eprintln!("  GP[{}] ButtonPressed: {:?} code={:?}", id, b, code),
-                EventType::ButtonReleased(b, code) => eprintln!("  GP[{}] ButtonReleased: {:?} code={:?}", id, b, code),
-                EventType::AxisChanged(a, v, code) => eprintln!("  GP[{}] AxisChanged: {:?} val={:.3} code={:?}", id, a, v, code),
-                EventType::Connected    => eprintln!("  GP[{}] Connected", id),
+                EventType::ButtonPressed(b, code) => {
+                    eprintln!("  GP[{}] ButtonPressed: {:?} code={:?}", id, b, code)
+                }
+                EventType::ButtonReleased(b, code) => {
+                    eprintln!("  GP[{}] ButtonReleased: {:?} code={:?}", id, b, code)
+                }
+                EventType::AxisChanged(a, v, code) => eprintln!(
+                    "  GP[{}] AxisChanged: {:?} val={:.3} code={:?}",
+                    id, a, v, code
+                ),
+                EventType::Connected => eprintln!("  GP[{}] Connected", id),
                 EventType::Disconnected => eprintln!("  GP[{}] Disconnected", id),
                 _ => {}
             }
         }
         match event {
-            EventType::ButtonPressed(b, code)  => apply_button_ext(state, b, code, true),
+            EventType::ButtonPressed(b, code) => apply_button_ext(state, b, code, true),
             EventType::ButtonReleased(b, code) => apply_button_ext(state, b, code, false),
             EventType::AxisChanged(a, v, _) => apply_axis(state, a, v),
             EventType::Connected => {
                 if debug {
                     for (_, gp) in gilrs.gamepads() {
-                        if gp.is_connected() { println!("Gamepad connected: \"{}\"", gp.name()); }
+                        if gp.is_connected() {
+                            println!("Gamepad connected: \"{}\"", gp.name());
+                        }
                     }
                 }
             }
-            EventType::Disconnected => { if debug { println!("Gamepad disconnected"); } *state = GamepadState::new(); }
+            EventType::Disconnected => {
+                if debug {
+                    println!("Gamepad disconnected");
+                }
+                *state = GamepadState::new();
+            }
             _ => {}
         }
     }
@@ -201,22 +271,34 @@ fn poll_gamepad(gilrs: &mut Gilrs, state: &mut GamepadState, debug: bool) {
 /// Map known gilrs buttons to Arduboy controls.
 /// For Unknown buttons (generic controllers without gilrs mapping DB entry),
 /// use the raw evdev code: even codes → A, odd codes → B.
-fn apply_button_ext(state: &mut GamepadState, btn: GilrsButton, code: gilrs::ev::Code, pressed: bool) {
+fn apply_button_ext(
+    state: &mut GamepadState,
+    btn: GilrsButton,
+    code: gilrs::ev::Code,
+    pressed: bool,
+) {
     match btn {
-        GilrsButton::DPadUp    => state.up    = pressed,
-        GilrsButton::DPadDown  => state.down  = pressed,
-        GilrsButton::DPadLeft  => state.left  = pressed,
+        GilrsButton::DPadUp => state.up = pressed,
+        GilrsButton::DPadDown => state.down = pressed,
+        GilrsButton::DPadLeft => state.left = pressed,
         GilrsButton::DPadRight => state.right = pressed,
         GilrsButton::South | GilrsButton::East | GilrsButton::Start => state.b = pressed,
-        GilrsButton::West | GilrsButton::North |
-        GilrsButton::LeftTrigger  | GilrsButton::RightTrigger |
-        GilrsButton::LeftTrigger2 | GilrsButton::RightTrigger2 |
-        GilrsButton::Select => state.a = pressed,
+        GilrsButton::West
+        | GilrsButton::North
+        | GilrsButton::LeftTrigger
+        | GilrsButton::RightTrigger
+        | GilrsButton::LeftTrigger2
+        | GilrsButton::RightTrigger2
+        | GilrsButton::Select => state.a = pressed,
         GilrsButton::Unknown => {
             // Generic controller fallback: split buttons by raw code parity
             // evdev codes 288,290,292... (even) → A;  289,291,293... (odd) → B
             let raw = code.into_u32() & 0xFFFF;
-            if raw % 2 == 0 { state.a = pressed; } else { state.b = pressed; }
+            if raw % 2 == 0 {
+                state.a = pressed;
+            } else {
+                state.b = pressed;
+            }
         }
         _ => {}
     }
@@ -224,15 +306,32 @@ fn apply_button_ext(state: &mut GamepadState, btn: GilrsButton, code: gilrs::ev:
 
 fn apply_axis(state: &mut GamepadState, axis: Axis, value: f32) {
     match axis {
-        Axis::LeftStickX  => state.left_stick_x = value,
-        Axis::LeftStickY  => state.left_stick_y = value,
-        Axis::RightStickX => { if state.left_stick_x.abs() < 0.01 { state.left_stick_x = value; } }
-        Axis::RightStickY => { if state.left_stick_y.abs() < 0.01 { state.left_stick_y = value; } }
-        Axis::DPadX => { state.left = value < -STICK_DEADZONE; state.right = value > STICK_DEADZONE; }
-        Axis::DPadY => { state.up = value < -STICK_DEADZONE; state.down = value > STICK_DEADZONE; }
+        Axis::LeftStickX => state.left_stick_x = value,
+        Axis::LeftStickY => state.left_stick_y = value,
+        Axis::RightStickX => {
+            if state.left_stick_x.abs() < 0.01 {
+                state.left_stick_x = value;
+            }
+        }
+        Axis::RightStickY => {
+            if state.left_stick_y.abs() < 0.01 {
+                state.left_stick_y = value;
+            }
+        }
+        Axis::DPadX => {
+            state.left = value < -STICK_DEADZONE;
+            state.right = value > STICK_DEADZONE;
+        }
+        Axis::DPadY => {
+            state.up = value < -STICK_DEADZONE;
+            state.down = value > STICK_DEADZONE;
+        }
         Axis::LeftZ | Axis::RightZ => {
-            if value > TRIGGER_DEADZONE { state.a = true; }
-            else if value < 0.05 { state.a = false; }
+            if value > TRIGGER_DEADZONE {
+                state.a = true;
+            } else if value < 0.05 {
+                state.a = false;
+            }
         }
         _ => {}
     }
@@ -248,8 +347,8 @@ fn save_screenshot_png(arduboy: &Arduboy, path: &str, scale: usize) -> Result<()
         let pixels: Vec<bool> = (0..SCREEN_WIDTH * SCREEN_HEIGHT)
             .map(|i| fb[i * 4] > 128)
             .collect();
-        let png = arduboy_core::png::encode_png_mono(
-            SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32, &pixels);
+        let png =
+            arduboy_core::png::encode_png_mono(SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32, &pixels);
         fs::write(path, &png).map_err(|e| format!("{}: {}", path, e))
     } else {
         // Scaled: nearest-neighbor upscale to RGBA PNG
@@ -260,11 +359,17 @@ fn save_screenshot_png(arduboy: &Arduboy, path: &str, scale: usize) -> Result<()
         for y in 0..SCREEN_HEIGHT {
             for x in 0..SCREEN_WIDTH {
                 let si = (y * SCREEN_WIDTH + x) * 4;
-                let r = fb[si]; let g = fb[si+1]; let b = fb[si+2]; let a = fb[si+3];
+                let r = fb[si];
+                let g = fb[si + 1];
+                let b = fb[si + 2];
+                let a = fb[si + 3];
                 for sy in 0..scale {
                     for sx in 0..scale {
                         let di = ((y * scale + sy) * sw + x * scale + sx) * 4;
-                        scaled[di] = r; scaled[di+1] = g; scaled[di+2] = b; scaled[di+3] = a;
+                        scaled[di] = r;
+                        scaled[di + 1] = g;
+                        scaled[di + 2] = b;
+                        scaled[di + 3] = a;
                     }
                 }
             }
@@ -280,13 +385,17 @@ fn eeprom_path(hex_path: &str) -> String {
     let p = std::path::Path::new(hex_path);
     let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("game");
     let dir = p.parent().unwrap_or(std::path::Path::new("."));
-    dir.join(format!("{}.eep", stem)).to_string_lossy().into_owned()
+    dir.join(format!("{}.eep", stem))
+        .to_string_lossy()
+        .into_owned()
 }
 
 fn load_eeprom(arduboy: &mut Arduboy, path: &str, debug: bool) {
     if let Ok(data) = fs::read(path) {
         arduboy.load_eeprom(&data);
-        if debug { eprintln!("EEPROM loaded: {} ({} bytes)", path, data.len()); }
+        if debug {
+            eprintln!("EEPROM loaded: {} ({} bytes)", path, data.len());
+        }
     }
 }
 
@@ -314,7 +423,11 @@ struct LoadedGame {
     elf_data: Option<Vec<u8>>,
 }
 
-fn load_game_file(path: &str, fx_override: Option<&str>, debug: bool) -> Result<LoadedGame, String> {
+fn load_game_file(
+    path: &str,
+    fx_override: Option<&str>,
+    debug: bool,
+) -> Result<LoadedGame, String> {
     let lower = path.to_lowercase();
 
     if lower.ends_with(".arduboy") {
@@ -323,13 +436,19 @@ fn load_game_file(path: &str, fx_override: Option<&str>, debug: bool) -> Result<
         let ab = arduboy_core::arduboy_file::parse_arduboy(&data)?;
         if debug {
             eprintln!("Arduboy file: \"{}\" by {}", ab.title, ab.author);
-            if let Some(ref fx) = ab.fx_data { eprintln!("  FX data: {} bytes", fx.len()); }
+            if let Some(ref fx) = ab.fx_data {
+                eprintln!("  FX data: {} bytes", fx.len());
+            }
         }
         Ok(LoadedGame {
             hex_str: ab.hex.ok_or("No HEX in .arduboy file")?,
             fx_data: ab.fx_data,
             fx_save: ab.fx_save,
-            title: if ab.title.is_empty() { String::new() } else { ab.title },
+            title: if ab.title.is_empty() {
+                String::new()
+            } else {
+                ab.title
+            },
             hex_path: path.to_string(),
             elf_data: None,
         })
@@ -341,7 +460,9 @@ fn load_game_file(path: &str, fx_override: Option<&str>, debug: bool) -> Result<
             hex_str: String::new(), // not used for ELF
             fx_data: if let Some(fx_path) = fx_override {
                 Some(fs::read(fx_path).map_err(|e| format!("{}: {}", fx_path, e))?)
-            } else { auto_find_fx(path) },
+            } else {
+                auto_find_fx(path)
+            },
             fx_save: None,
             title: String::new(),
             hex_path: path.to_string(),
@@ -356,7 +477,9 @@ fn load_game_file(path: &str, fx_override: Option<&str>, debug: bool) -> Result<
             auto_find_fx(path)
         };
         if debug {
-            if let Some(ref fx) = fx_data { eprintln!("FX data: {} bytes", fx.len()); }
+            if let Some(ref fx) = fx_data {
+                eprintln!("FX data: {} bytes", fx.len());
+            }
         }
         Ok(LoadedGame {
             hex_str,
@@ -374,10 +497,19 @@ fn auto_find_fx(hex_path: &str) -> Option<Vec<u8>> {
     if bin != hex_path && std::path::Path::new(&bin).exists() {
         return fs::read(&bin).ok();
     }
-    let dir = std::path::Path::new(hex_path).parent().unwrap_or(std::path::Path::new("."));
-    let stem = std::path::Path::new(hex_path).file_stem().and_then(|s| s.to_str()).unwrap_or("");
+    let dir = std::path::Path::new(hex_path)
+        .parent()
+        .unwrap_or(std::path::Path::new("."));
+    let stem = std::path::Path::new(hex_path)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("");
     let fx = dir.join(format!("{}-fx.bin", stem));
-    if fx.exists() { fs::read(&fx).ok() } else { None }
+    if fx.exists() {
+        fs::read(&fx).ok()
+    } else {
+        None
+    }
 }
 
 /// Load FX data+save into the emulator at the correct flash layout offsets.
@@ -385,18 +517,31 @@ fn load_game_fx(arduboy: &mut Arduboy, game: &LoadedGame, debug: bool) {
     if let Some(ref fx) = game.fx_data {
         let save = game.fx_save.as_deref();
         let (dp, sp) = arduboy.load_fx_layout(fx, save);
-        eprintln!("FX layout: data={} bytes at page 0x{:04X} (byte 0x{:06X}), save at page 0x{:04X}",
-            fx.len(), dp, dp as u32 * 256, sp);
+        eprintln!(
+            "FX layout: data={} bytes at page 0x{:04X} (byte 0x{:06X}), save at page 0x{:04X}",
+            fx.len(),
+            dp,
+            dp as u32 * 256,
+            sp
+        );
         if debug {
             // Verify: print first 16 bytes at data offset
             let data_off = dp as usize * 256;
             let end = (data_off + 16).min(arduboy.fx_flash.data.len());
             if data_off < arduboy.fx_flash.data.len() {
-                let flash_bytes: Vec<String> = arduboy.fx_flash.data[data_off..end].iter()
-                    .map(|b| format!("{:02X}", b)).collect();
-                eprintln!("FX verify: flash[0x{:06X}..] = {}", data_off, flash_bytes.join(" "));
-                let orig: Vec<String> = fx[..16.min(fx.len())].iter()
-                    .map(|b| format!("{:02X}", b)).collect();
+                let flash_bytes: Vec<String> = arduboy.fx_flash.data[data_off..end]
+                    .iter()
+                    .map(|b| format!("{:02X}", b))
+                    .collect();
+                eprintln!(
+                    "FX verify: flash[0x{:06X}..] = {}",
+                    data_off,
+                    flash_bytes.join(" ")
+                );
+                let orig: Vec<String> = fx[..16.min(fx.len())]
+                    .iter()
+                    .map(|b| format!("{:02X}", b))
+                    .collect();
                 eprintln!("FX verify: data.bin[0..16]   = {}", orig.join(" "));
             }
         }
@@ -413,7 +558,8 @@ fn scan_game_dir(dir: &str) -> Vec<String> {
         for entry in entries.flatten() {
             if let Ok(name) = entry.file_name().into_string() {
                 let lower = name.to_lowercase();
-                if lower.ends_with(".hex") || lower.ends_with(".arduboy") || lower.ends_with(".elf") {
+                if lower.ends_with(".hex") || lower.ends_with(".arduboy") || lower.ends_with(".elf")
+                {
                     games.push(entry.path().to_string_lossy().into_owned());
                 }
             }
@@ -426,12 +572,14 @@ fn scan_game_dir(dir: &str) -> Vec<String> {
 /// Find the index of a file path in a sorted game list.
 fn find_game_index(games: &[String], current: &str) -> Option<usize> {
     let current_canon = std::path::Path::new(current)
-        .canonicalize().ok()
+        .canonicalize()
+        .ok()
         .map(|p| p.to_string_lossy().into_owned())
         .unwrap_or_else(|| current.to_string());
     games.iter().position(|g| {
         let g_canon = std::path::Path::new(g)
-            .canonicalize().ok()
+            .canonicalize()
+            .ok()
             .map(|p| p.to_string_lossy().into_owned())
             .unwrap_or_else(|| g.clone());
         g_canon == current_canon || g == current
@@ -440,8 +588,11 @@ fn find_game_index(games: &[String], current: &str) -> Option<usize> {
 
 /// Load a game into the emulator, returning the new hex_path and title.
 fn switch_game(
-    arduboy: &mut Arduboy, path: &str, eep_path_old: &str,
-    no_save: bool, debug: bool,
+    arduboy: &mut Arduboy,
+    path: &str,
+    eep_path_old: &str,
+    no_save: bool,
+    debug: bool,
 ) -> Result<(String, String, String), String> {
     // Save current EEPROM before switching
     if !no_save && arduboy.eeprom_dirty {
@@ -471,14 +622,20 @@ fn switch_game(
         arduboy.reset();
     }
 
-    arduboy.load_hex(&game.hex_str).map_err(|e| format!("HEX parse: {}", e))?;
+    arduboy
+        .load_hex(&game.hex_str)
+        .map_err(|e| format!("HEX parse: {}", e))?;
     load_game_fx(arduboy, &game, debug);
     let new_eep = eeprom_path(&game.hex_path);
-    if !no_save { load_eeprom(arduboy, &new_eep, debug); }
+    if !no_save {
+        load_eeprom(arduboy, &new_eep, debug);
+    }
     let title = if game.title.is_empty() {
-        std::path::Path::new(path).file_stem()
+        std::path::Path::new(path)
+            .file_stem()
             .and_then(|s| s.to_str())
-            .unwrap_or("unknown").to_string()
+            .unwrap_or("unknown")
+            .to_string()
     } else {
         game.title
     };
@@ -493,11 +650,11 @@ fn main() {
     // hasn't explicitly chosen a backend.
     #[cfg(target_os = "linux")]
     {
-        if env::var("WAYLAND_DISPLAY").is_ok()
-            && env::var("MINIFB_BACKEND").is_err()
-        {
+        if env::var("WAYLAND_DISPLAY").is_ok() && env::var("MINIFB_BACKEND").is_err() {
             // Safety: called at start of main() before any threads are spawned.
-            unsafe { env::remove_var("WAYLAND_DISPLAY"); }
+            unsafe {
+                env::remove_var("WAYLAND_DISPLAY");
+            }
             eprintln!("Note: forcing X11 backend (minifb Wayland crash workaround)");
         }
     }
@@ -551,23 +708,29 @@ fn main() {
     let lcd_start = args.iter().any(|a| a == "--lcd");
     let no_blur = args.iter().any(|a| a == "--no-blur");
 
-    let gdb_port: Option<u16> = args.iter()
+    let gdb_port: Option<u16> = args
+        .iter()
         .position(|a| a == "--gdb")
         .and_then(|i| args.get(i + 1))
         .and_then(|s| s.parse().ok());
 
-    let initial_scale: usize = args.iter()
+    let initial_scale: usize = args
+        .iter()
         .position(|a| a == "--scale")
         .and_then(|i| args.get(i + 1))
         .and_then(|s| s.parse().ok())
-        .unwrap_or(6).max(1).min(6);
+        .unwrap_or(6)
+        .max(1)
+        .min(6);
 
-    let fx_override: Option<&str> = args.iter()
+    let fx_override: Option<&str> = args
+        .iter()
         .position(|a| a == "--fx")
         .and_then(|i| args.get(i + 1))
         .map(|s| s.as_str());
 
-    let cpu_override: Option<CpuType> = args.iter()
+    let cpu_override: Option<CpuType> = args
+        .iter()
         .position(|a| a == "--cpu")
         .and_then(|i| args.get(i + 1))
         .map(|s| match s.as_str() {
@@ -576,8 +739,7 @@ fn main() {
         });
 
     // Load game (hex or .arduboy)
-    let game = load_game_file(game_path, fx_override, debug)
-        .expect("Failed to load game file");
+    let game = load_game_file(game_path, fx_override, debug).expect("Failed to load game file");
 
     // Determine CPU type: explicit --cpu flag, or auto-detect from flash contents
     let cpu_type = if let Some(ct) = cpu_override {
@@ -606,8 +768,11 @@ fn main() {
     if let Some(ref elf_data) = game.elf_data {
         match arduboy.load_elf(elf_data) {
             Ok(elf) => {
-                eprintln!("ELF loaded: {} symbols, {} line entries",
-                    elf.symbols.len(), elf.line_map.len());
+                eprintln!(
+                    "ELF loaded: {} symbols, {} line entries",
+                    elf.symbols.len(),
+                    elf.line_map.len()
+                );
                 _elf_info = Some(elf);
             }
             Err(e) => {
@@ -616,8 +781,12 @@ fn main() {
             }
         }
     } else {
-        let size = arduboy.load_hex(&game.hex_str).expect("Failed to parse HEX");
-        if debug { eprintln!("Loaded {} bytes into flash", size); }
+        let size = arduboy
+            .load_hex(&game.hex_str)
+            .expect("Failed to parse HEX");
+        if debug {
+            eprintln!("Loaded {} bytes into flash", size);
+        }
     }
 
     load_game_fx(&mut arduboy, &game, debug);
@@ -632,11 +801,15 @@ fn main() {
                     if let Ok(addr) = u16::from_str_radix(s, 16) {
                         let word_addr = addr / 2;
                         arduboy.breakpoints.push(word_addr);
-                        if debug { eprintln!("Breakpoint: 0x{:04X} (word 0x{:04X})", addr, word_addr); }
+                        if debug {
+                            eprintln!("Breakpoint: 0x{:04X} (word 0x{:04X})", addr, word_addr);
+                        }
                     }
                 }
                 i += 2;
-            } else { i += 1; }
+            } else {
+                i += 1;
+            }
         }
     }
 
@@ -648,21 +821,27 @@ fn main() {
                 if let Some(s) = args.get(i + 1) {
                     let s = s.trim_start_matches("0x").trim_start_matches("0X");
                     if let Ok(addr) = u16::from_str_radix(s, 16) {
-                        let idx = arduboy.debugger.add_watchpoint(
-                            addr, arduboy_core::debugger::WatchKind::ReadWrite
-                        );
-                        if debug { eprintln!("Watchpoint [{}]: 0x{:04X} RW", idx, addr); }
+                        let idx = arduboy
+                            .debugger
+                            .add_watchpoint(addr, arduboy_core::debugger::WatchKind::ReadWrite);
+                        if debug {
+                            eprintln!("Watchpoint [{}]: 0x{:04X} RW", idx, addr);
+                        }
                     }
                 }
                 i += 2;
-            } else { i += 1; }
+            } else {
+                i += 1;
+            }
         }
     }
 
     // Auto-start profiler if --profile
     if profile_enabled {
         arduboy.profiler.start(arduboy.cpu.tick);
-        if debug { eprintln!("Profiler: started"); }
+        if debug {
+            eprintln!("Profiler: started");
+        }
     }
 
     // EEPROM: auto-load
@@ -678,8 +857,18 @@ fn main() {
     } else if headless {
         run_headless(&args, &mut arduboy, serial_enabled);
     } else {
-        run_gui(&mut arduboy, mute, debug, initial_scale, serial_enabled,
-                &game.hex_path, &game.title, no_save, lcd_start, no_blur);
+        run_gui(
+            &mut arduboy,
+            mute,
+            debug,
+            initial_scale,
+            serial_enabled,
+            &game.hex_path,
+            &game.title,
+            no_save,
+            lcd_start,
+            no_blur,
+        );
     }
 
     // Profiler report on exit
@@ -698,37 +887,56 @@ fn main() {
 
 // ─── GUI Mode ───────────────────────────────────────────────────────────────
 
-fn run_gui(arduboy: &mut Arduboy, start_muted: bool, debug: bool, initial_scale: usize,
-           serial_enabled: bool, hex_path: &str, game_title: &str, no_save: bool,
-           lcd_start: bool, no_blur: bool)
-{
+fn run_gui(
+    arduboy: &mut Arduboy,
+    start_muted: bool,
+    debug: bool,
+    initial_scale: usize,
+    serial_enabled: bool,
+    hex_path: &str,
+    game_title: &str,
+    no_save: bool,
+    lcd_start: bool,
+    no_blur: bool,
+) {
     let mut cur_hex_path = hex_path.to_string();
     let mut scale = initial_scale;
     let mut scaled_w = SCREEN_WIDTH * scale;
     let mut scaled_h = SCREEN_HEIGHT * scale;
     let make_title = |game_t: &str| -> String {
-        if game_t.is_empty() { "Arduboy v0.8.1".to_string() }
-        else { format!("Arduboy v0.8.1 - {}", game_t) }
+        if game_t.is_empty() {
+            "Arduboy v0.8.1".to_string()
+        } else {
+            format!("Arduboy v0.8.1 - {}", game_t)
+        }
     };
     let mut title_base = make_title(game_title);
 
     let mut window = Window::new(
-        &title_base, scaled_w, scaled_h,
+        &title_base,
+        scaled_w,
+        scaled_h,
         WindowOptions {
             scale: Scale::X1,
             scale_mode: ScaleMode::UpperLeft,
             resize: true,
             ..Default::default()
         },
-    ).expect("Failed to create window");
+    )
+    .expect("Failed to create window");
     window.set_target_fps(60);
 
-    let audio_ring: Arc<std::sync::Mutex<std::collections::VecDeque<f32>>> =
-        Arc::new(std::sync::Mutex::new(std::collections::VecDeque::with_capacity(16384)));
+    let audio_ring: Arc<std::sync::Mutex<std::collections::VecDeque<f32>>> = Arc::new(
+        std::sync::Mutex::new(std::collections::VecDeque::with_capacity(16384)),
+    );
     let freq_l = Arc::new(AtomicU32::new(0.0f32.to_bits()));
     let freq_r = Arc::new(AtomicU32::new(0.0f32.to_bits()));
     let mut muted = start_muted;
-    let mut _audio = if !muted { setup_audio(audio_ring.clone(), freq_l.clone(), freq_r.clone()) } else { None };
+    let mut _audio = if !muted {
+        setup_audio(audio_ring.clone(), freq_l.clone(), freq_r.clone())
+    } else {
+        None
+    };
     let mut pcm_buf: Vec<f32> = Vec::with_capacity(16384);
 
     let mut gilrs = init_gamepad(debug);
@@ -760,8 +968,10 @@ fn run_gui(arduboy: &mut Arduboy, start_muted: bool, debug: bool, initial_scale:
 
     // File browser state
     let game_dir = std::path::Path::new(&cur_hex_path)
-        .parent().unwrap_or(std::path::Path::new("."))
-        .to_string_lossy().into_owned();
+        .parent()
+        .unwrap_or(std::path::Path::new("."))
+        .to_string_lossy()
+        .into_owned();
     let mut game_list = scan_game_dir(&game_dir);
     let mut game_index = find_game_index(&game_list, &cur_hex_path).unwrap_or(0);
     let mut prev_n = false;
@@ -793,13 +1003,18 @@ fn run_gui(arduboy: &mut Arduboy, start_muted: bool, debug: bool, initial_scale:
     let mut prev_f9 = false;
 
     while window.is_open() && !window.is_key_down(Key::Escape) {
-        if let Some(ref mut g) = gilrs { poll_gamepad(g, &mut gp, debug); }
+        if let Some(ref mut g) = gilrs {
+            poll_gamepad(g, &mut gp, debug);
+        }
 
         // Scale toggle (1-6)
         let num = [
-            window.is_key_down(Key::Key1), window.is_key_down(Key::Key2),
-            window.is_key_down(Key::Key3), window.is_key_down(Key::Key4),
-            window.is_key_down(Key::Key5), window.is_key_down(Key::Key6),
+            window.is_key_down(Key::Key1),
+            window.is_key_down(Key::Key2),
+            window.is_key_down(Key::Key3),
+            window.is_key_down(Key::Key4),
+            window.is_key_down(Key::Key5),
+            window.is_key_down(Key::Key6),
         ];
         for i in 0..6 {
             if num[i] && !prev_num[i] && !fullscreen {
@@ -807,12 +1022,28 @@ fn run_gui(arduboy: &mut Arduboy, start_muted: bool, debug: bool, initial_scale:
                 scaled_w = SCREEN_WIDTH * scale;
                 scaled_h = SCREEN_HEIGHT * scale;
                 scaled_buf.resize(scaled_w * scaled_h, 0);
-                let (ww, wh) = if portrait { (scaled_h, scaled_w) } else { (scaled_w, scaled_h) };
+                let (ww, wh) = if portrait {
+                    (scaled_h, scaled_w)
+                } else {
+                    (scaled_w, scaled_h)
+                };
                 window = Window::new(
-                    &title_base, ww, wh,
-                    WindowOptions { scale: Scale::X1, scale_mode: ScaleMode::UpperLeft, resize: true, ..Default::default() },
-                ).expect("window");
-                if fps_unlimited { window.set_target_fps(0); } else { window.set_target_fps(60); }
+                    &title_base,
+                    ww,
+                    wh,
+                    WindowOptions {
+                        scale: Scale::X1,
+                        scale_mode: ScaleMode::UpperLeft,
+                        resize: true,
+                        ..Default::default()
+                    },
+                )
+                .expect("window");
+                if fps_unlimited {
+                    window.set_target_fps(0);
+                } else {
+                    window.set_target_fps(60);
+                }
             }
         }
         prev_num = num;
@@ -829,11 +1060,26 @@ fn run_gui(arduboy: &mut Arduboy, start_muted: bool, debug: bool, initial_scale:
                 scaled_h = SCREEN_HEIGHT * scale;
             }
             scaled_buf.resize(scaled_w * scaled_h, 0);
-            let (ww, wh) = if portrait { (scaled_h, scaled_w) } else { (scaled_w, scaled_h) };
-            let mut opts = WindowOptions { scale: Scale::X1, scale_mode: ScaleMode::UpperLeft, resize: true, ..Default::default() };
-            if fullscreen { opts.borderless = true; }
+            let (ww, wh) = if portrait {
+                (scaled_h, scaled_w)
+            } else {
+                (scaled_w, scaled_h)
+            };
+            let mut opts = WindowOptions {
+                scale: Scale::X1,
+                scale_mode: ScaleMode::UpperLeft,
+                resize: true,
+                ..Default::default()
+            };
+            if fullscreen {
+                opts.borderless = true;
+            }
             window = Window::new(&title_base, ww, wh, opts).expect("window");
-            if fps_unlimited { window.set_target_fps(0); } else { window.set_target_fps(60); }
+            if fps_unlimited {
+                window.set_target_fps(0);
+            } else {
+                window.set_target_fps(60);
+            }
         }
         prev_f11 = f11;
 
@@ -898,7 +1144,14 @@ fn run_gui(arduboy: &mut Arduboy, start_muted: bool, debug: bool, initial_scale:
         let ak = window.is_key_down(Key::A);
         if ak && !prev_a {
             arduboy.audio_buf.toggle_filters();
-            eprintln!("Audio filter: {}", if arduboy.audio_buf.filters_enabled { "ON" } else { "OFF" });
+            eprintln!(
+                "Audio filter: {}",
+                if arduboy.audio_buf.filters_enabled {
+                    "ON"
+                } else {
+                    "OFF"
+                }
+            );
         }
         prev_a = ak;
 
@@ -907,10 +1160,23 @@ fn run_gui(arduboy: &mut Arduboy, start_muted: bool, debug: bool, initial_scale:
         if vk && !prev_v {
             portrait = !portrait;
             eprintln!("Portrait: {}", if portrait { "ON" } else { "OFF" });
-            let (ww, wh) = if portrait { (scaled_h, scaled_w) } else { (scaled_w, scaled_h) };
-            let opts = WindowOptions { scale: Scale::X1, scale_mode: ScaleMode::UpperLeft, resize: true, ..Default::default() };
+            let (ww, wh) = if portrait {
+                (scaled_h, scaled_w)
+            } else {
+                (scaled_w, scaled_h)
+            };
+            let opts = WindowOptions {
+                scale: Scale::X1,
+                scale_mode: ScaleMode::UpperLeft,
+                resize: true,
+                ..Default::default()
+            };
             window = Window::new(&title_base, ww, wh, opts).expect("window");
-            if fps_unlimited { window.set_target_fps(0); } else { window.set_target_fps(60); }
+            if fps_unlimited {
+                window.set_target_fps(0);
+            } else {
+                window.set_target_fps(60);
+            }
         }
         prev_v = vk;
 
@@ -920,7 +1186,10 @@ fn run_gui(arduboy: &mut Arduboy, start_muted: bool, debug: bool, initial_scale:
             let cur_s = scaled_w / SCREEN_WIDTH;
             let f = format!("screenshot_{:04}_{}x.png", screenshot_n, cur_s);
             match save_screenshot_png(arduboy, &f, cur_s) {
-                Ok(()) => { eprintln!("Screenshot: {} ({}x)", f, cur_s); screenshot_n += 1; }
+                Ok(()) => {
+                    eprintln!("Screenshot: {} ({}x)", f, cur_s);
+                    screenshot_n += 1;
+                }
                 Err(e) => eprintln!("Screenshot error: {}", e),
             }
         }
@@ -935,15 +1204,22 @@ fn run_gui(arduboy: &mut Arduboy, start_muted: bool, debug: bool, initial_scale:
                 let gif_data = encoder.finish();
                 let fname = format!("recording_{:04}.gif", gif_file_n);
                 match fs::write(&fname, &gif_data) {
-                    Ok(()) => eprintln!("GIF saved: {} ({} frames, {} bytes)",
-                        fname, frames, gif_data.len()),
+                    Ok(()) => eprintln!(
+                        "GIF saved: {} ({} frames, {} bytes)",
+                        fname,
+                        frames,
+                        gif_data.len()
+                    ),
                     Err(e) => eprintln!("GIF save error: {}", e),
                 }
                 gif_file_n += 1;
             } else {
                 // Start recording
                 gif_encoder = Some(arduboy_core::gif::GifEncoder::new(
-                    SCREEN_WIDTH as u16, SCREEN_HEIGHT as u16, 2));
+                    SCREEN_WIDTH as u16,
+                    SCREEN_HEIGHT as u16,
+                    2,
+                ));
                 eprintln!("GIF recording started (press G to stop)");
             }
         }
@@ -964,7 +1240,9 @@ fn run_gui(arduboy: &mut Arduboy, start_muted: bool, debug: bool, initial_scale:
                         eprintln!("Reload error: {}", e);
                     } else {
                         load_game_fx(arduboy, &game, debug);
-                        if !no_save { load_eeprom(arduboy, &eep_path, debug); }
+                        if !no_save {
+                            load_eeprom(arduboy, &eep_path, debug);
+                        }
                         frame_count = 0;
                         eprintln!("Reloaded: {}", cur_hex_path);
                     }
@@ -983,8 +1261,10 @@ fn run_gui(arduboy: &mut Arduboy, start_muted: bool, debug: bool, initial_scale:
             eprintln!("--- Games in {} ({} found) ---", game_dir, game_list.len());
             for (i, g) in game_list.iter().enumerate() {
                 let marker = if i == game_index { " <<" } else { "" };
-                let name = std::path::Path::new(g).file_name()
-                    .and_then(|s| s.to_str()).unwrap_or(g);
+                let name = std::path::Path::new(g)
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or(g);
                 eprintln!("  {:3}. {}{}", i + 1, name, marker);
             }
             eprintln!("---");
@@ -997,14 +1277,17 @@ fn run_gui(arduboy: &mut Arduboy, start_muted: bool, debug: bool, initial_scale:
             let path = game_list[next_idx].clone();
             match switch_game(arduboy, &path, &eep_path, no_save, debug) {
                 Ok((hp, title, ep)) => {
-                    cur_hex_path = hp; eep_path = ep;
+                    cur_hex_path = hp;
+                    eep_path = ep;
                     state_path = arduboy_core::savestate::state_path(&cur_hex_path);
                     title_base = make_title(&title);
                     game_index = next_idx;
                     frame_count = 0;
                     window.set_title(&title_base);
-                    let name = std::path::Path::new(&path).file_name()
-                        .and_then(|s| s.to_str()).unwrap_or(&path);
+                    let name = std::path::Path::new(&path)
+                        .file_name()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or(&path);
                     eprintln!("Loaded [{}/{}]: {}", game_index + 1, game_list.len(), name);
                 }
                 Err(e) => eprintln!("Load error: {}", e),
@@ -1014,18 +1297,25 @@ fn run_gui(arduboy: &mut Arduboy, start_muted: bool, debug: bool, initial_scale:
 
         let pk = window.is_key_down(Key::P);
         if pk && !prev_p && !game_list.is_empty() {
-            let prev_idx = if game_index == 0 { game_list.len() - 1 } else { game_index - 1 };
+            let prev_idx = if game_index == 0 {
+                game_list.len() - 1
+            } else {
+                game_index - 1
+            };
             let path = game_list[prev_idx].clone();
             match switch_game(arduboy, &path, &eep_path, no_save, debug) {
                 Ok((hp, title, ep)) => {
-                    cur_hex_path = hp; eep_path = ep;
+                    cur_hex_path = hp;
+                    eep_path = ep;
                     state_path = arduboy_core::savestate::state_path(&cur_hex_path);
                     title_base = make_title(&title);
                     game_index = prev_idx;
                     frame_count = 0;
                     window.set_title(&title_base);
-                    let name = std::path::Path::new(&path).file_name()
-                        .and_then(|s| s.to_str()).unwrap_or(&path);
+                    let name = std::path::Path::new(&path)
+                        .file_name()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or(&path);
                     eprintln!("Loaded [{}/{}]: {}", game_index + 1, game_list.len(), name);
                 }
                 Err(e) => eprintln!("Load error: {}", e),
@@ -1036,8 +1326,12 @@ fn run_gui(arduboy: &mut Arduboy, start_muted: bool, debug: bool, initial_scale:
         // Reg dump (D)
         let d = window.is_key_down(Key::D);
         if d && !prev_d {
-            eprintln!("--- Regs (frame {}) ---\n{}\nNext: {}\n---",
-                frame_count, arduboy.dump_regs(), arduboy.disasm_at_pc());
+            eprintln!(
+                "--- Regs (frame {}) ---\n{}\nNext: {}\n---",
+                frame_count,
+                arduboy.dump_regs(),
+                arduboy.disasm_at_pc()
+            );
         }
         prev_d = d;
 
@@ -1047,7 +1341,9 @@ fn run_gui(arduboy: &mut Arduboy, start_muted: bool, debug: bool, initial_scale:
             let state = arduboy.save_full_state();
             let cpu_byte = arduboy.cpu_type_byte();
             match arduboy_core::savestate::save_to_file(
-                &state, cpu_byte, std::path::Path::new(&state_path)
+                &state,
+                cpu_byte,
+                std::path::Path::new(&state_path),
             ) {
                 Ok(()) => {
                     let size = std::fs::metadata(&state_path).map(|m| m.len()).unwrap_or(0);
@@ -1069,7 +1365,8 @@ fn run_gui(arduboy: &mut Arduboy, start_muted: bool, debug: bool, initial_scale:
         if f9 && !prev_f9 {
             let cpu_byte = arduboy.cpu_type_byte();
             match arduboy_core::savestate::load_from_file(
-                std::path::Path::new(&state_path), cpu_byte
+                std::path::Path::new(&state_path),
+                cpu_byte,
             ) {
                 Ok(state) => {
                     arduboy.load_full_state(&state);
@@ -1088,12 +1385,15 @@ fn run_gui(arduboy: &mut Arduboy, start_muted: bool, debug: bool, initial_scale:
         prev_f9 = f9;
 
         // Input
-        arduboy.set_button(Button::Up,    window.is_key_down(Key::Up)    || gp.eff_up());
-        arduboy.set_button(Button::Down,  window.is_key_down(Key::Down)  || gp.eff_down());
-        arduboy.set_button(Button::Left,  window.is_key_down(Key::Left)  || gp.eff_left());
-        arduboy.set_button(Button::Right, window.is_key_down(Key::Right) || gp.eff_right());
-        arduboy.set_button(Button::A,     window.is_key_down(Key::Z)     || gp.a);
-        arduboy.set_button(Button::B,     window.is_key_down(Key::X)     || gp.b);
+        arduboy.set_button(Button::Up, window.is_key_down(Key::Up) || gp.eff_up());
+        arduboy.set_button(Button::Down, window.is_key_down(Key::Down) || gp.eff_down());
+        arduboy.set_button(Button::Left, window.is_key_down(Key::Left) || gp.eff_left());
+        arduboy.set_button(
+            Button::Right,
+            window.is_key_down(Key::Right) || gp.eff_right(),
+        );
+        arduboy.set_button(Button::A, window.is_key_down(Key::Z) || gp.a);
+        arduboy.set_button(Button::B, window.is_key_down(Key::X) || gp.b);
 
         // Rewind (Backspace) — restore previous snapshot instead of running
         let bksp = window.is_key_down(Key::Backspace);
@@ -1131,9 +1431,10 @@ fn run_gui(arduboy: &mut Arduboy, start_muted: bool, debug: bool, initial_scale:
                     display_cmds, display_data, fb_nonzero,
                     arduboy.cpu.pc);
                 if frame_count == 1 {
-                    eprintln!("  DDRD=0x{:02X} PORTD=0x{:02X} FX_loaded={}",
-                        arduboy.mem.data[0x2A], arduboy.mem.data[0x2B],
-                        arduboy.fx_flash.loaded);
+                    eprintln!(
+                        "  DDRD=0x{:02X} PORTD=0x{:02X} FX_loaded={}",
+                        arduboy.mem.data[0x2A], arduboy.mem.data[0x2B], arduboy.fx_flash.loaded
+                    );
                 }
             }
             // Always print FX diagnostics at frame 1 (helps debug FX games)
@@ -1155,7 +1456,11 @@ fn run_gui(arduboy: &mut Arduboy, start_muted: bool, debug: bool, initial_scale:
         }
 
         if !bksp && arduboy.breakpoint_hit {
-            eprintln!("*** Breakpoint: {} ***\n{}", arduboy.disasm_at_pc(), arduboy.dump_regs());
+            eprintln!(
+                "*** Breakpoint: {} ***\n{}",
+                arduboy.disasm_at_pc(),
+                arduboy.dump_regs()
+            );
             arduboy.breakpoint_hit = false;
         }
 
@@ -1200,7 +1505,8 @@ fn run_gui(arduboy: &mut Arduboy, start_muted: bool, debug: bool, initial_scale:
         }
 
         // EEPROM auto-save (every 10 seconds if dirty)
-        if !no_save && arduboy.eeprom_dirty && last_eeprom_save.elapsed() >= Duration::from_secs(10) {
+        if !no_save && arduboy.eeprom_dirty && last_eeprom_save.elapsed() >= Duration::from_secs(10)
+        {
             save_eeprom(arduboy, &eep_path, debug);
             arduboy.eeprom_dirty = false;
             last_eeprom_save = Instant::now();
@@ -1236,12 +1542,16 @@ fn run_gui(arduboy: &mut Arduboy, start_muted: bool, debug: bool, initial_scale:
         if lcd_effect {
             // SSD1306 OLED palette: ON → blue-white, OFF → near-black
             // PCD8544 LCD palette:  ON → dark gray-green, OFF → yellow-green
-            let (col_on, col_off): ((f32,f32,f32), (f32,f32,f32)) = if is_pcd {
-                ((0x3C as f32, 0x48 as f32, 0x28 as f32),
-                 (0xC0 as f32, 0xD8 as f32, 0x78 as f32))
+            let (col_on, col_off): ((f32, f32, f32), (f32, f32, f32)) = if is_pcd {
+                (
+                    (0x3C as f32, 0x48 as f32, 0x28 as f32),
+                    (0xC0 as f32, 0xD8 as f32, 0x78 as f32),
+                )
             } else {
-                ((0xA0 as f32, 0xD0 as f32, 0xFF as f32),
-                 (0x05 as f32, 0x05 as f32, 0x08 as f32))
+                (
+                    (0xA0 as f32, 0xD0 as f32, 0xFF as f32),
+                    (0x05 as f32, 0x05 as f32, 0x08 as f32),
+                )
             };
             // Temporal blend factor: PCD8544 20% previous, SSD1306 5%
             let ghost = if is_pcd { 0.20f32 } else { 0.05f32 };
@@ -1268,7 +1578,9 @@ fn run_gui(arduboy: &mut Arduboy, start_muted: bool, debug: bool, initial_scale:
                     for sy in 0..cur_scale {
                         let base = (y * cur_scale + sy) * scaled_w + x * cur_scale;
                         for sx in 0..cur_scale {
-                            if base + sx < scaled_buf.len() { scaled_buf[base + sx] = c; }
+                            if base + sx < scaled_buf.len() {
+                                scaled_buf[base + sx] = c;
+                            }
                         }
                     }
                 }
@@ -1291,7 +1603,9 @@ fn run_gui(arduboy: &mut Arduboy, start_muted: bool, debug: bool, initial_scale:
                                 let gx = bx + sx;
                                 let gy = by + sy;
                                 let idx = gy * scaled_w + gx;
-                                if idx >= scaled_buf.len() { continue; }
+                                if idx >= scaled_buf.len() {
+                                    continue;
+                                }
 
                                 // Is this sub-pixel on a grid edge?
                                 let on_right = sx == cur_scale - 1;
@@ -1361,7 +1675,9 @@ fn run_gui(arduboy: &mut Arduboy, start_muted: bool, debug: bool, initial_scale:
                     for sy in 0..cur_scale {
                         let base = (y * cur_scale + sy) * scaled_w + x * cur_scale;
                         for sx in 0..cur_scale {
-                            if base + sx < scaled_buf.len() { scaled_buf[base + sx] = c; }
+                            if base + sx < scaled_buf.len() {
+                                scaled_buf[base + sx] = c;
+                            }
                         }
                     }
                 }
@@ -1393,7 +1709,9 @@ fn run_gui(arduboy: &mut Arduboy, start_muted: bool, debug: bool, initial_scale:
                             sg += ((n >> 8) & 0xFF) * 2;
                             sb += (n & 0xFF) * 2;
                         } else {
-                            sr += cr * 2; sg += cg * 2; sb += cb * 2;
+                            sr += cr * 2;
+                            sg += cg * 2;
+                            sb += cb * 2;
                         }
                     }
                     for &(dx, dy) in &[(-1isize, -1isize), (1, -1), (-1, 1), (1, 1)] {
@@ -1405,7 +1723,9 @@ fn run_gui(arduboy: &mut Arduboy, start_muted: bool, debug: bool, initial_scale:
                             sg += (n >> 8) & 0xFF;
                             sb += n & 0xFF;
                         } else {
-                            sr += cr; sg += cg; sb += cb;
+                            sr += cr;
+                            sg += cg;
+                            sb += cb;
                         }
                     }
                     blur_buf[idx] = ((sr / 16) << 16) | ((sg / 16) << 8) | (sb / 16);
@@ -1417,8 +1737,8 @@ fn run_gui(arduboy: &mut Arduboy, start_muted: bool, debug: bool, initial_scale:
         let final_src = if use_blur { &blur_buf } else { &scaled_buf };
         if portrait {
             // Rotate 90° CCW: left side → bottom (portrait orientation)
-            let rw = scaled_h;  // rotated width  = landscape height
-            let rh = scaled_w;  // rotated height = landscape width
+            let rw = scaled_h; // rotated width  = landscape height
+            let rh = scaled_w; // rotated height = landscape width
             rot_buf.resize(rw * rh, 0);
             for y in 0..scaled_h {
                 for x in 0..scaled_w {
@@ -1429,15 +1749,21 @@ fn run_gui(arduboy: &mut Arduboy, start_muted: bool, debug: bool, initial_scale:
             }
             window.update_with_buffer(&rot_buf, rw, rh).expect("update");
         } else {
-            window.update_with_buffer(final_src, scaled_w, scaled_h).expect("update");
+            window
+                .update_with_buffer(final_src, scaled_w, scaled_h)
+                .expect("update");
         }
 
         if last_fps_time.elapsed() >= Duration::from_secs(2) {
             let fps = fps_frames as f64 / last_fps_time.elapsed().as_secs_f64();
             let (lh, rh) = arduboy.get_audio_tone();
             let mut ti = String::new();
-            if lh > 0.0 { ti.push_str(&format!(" L:{:.0}Hz", lh)); }
-            if rh > 0.0 { ti.push_str(&format!(" R:{:.0}Hz", rh)); }
+            if lh > 0.0 {
+                ti.push_str(&format!(" L:{:.0}Hz", lh));
+            }
+            if rh > 0.0 {
+                ti.push_str(&format!(" R:{:.0}Hz", rh));
+            }
             let ms = if muted { " [MUTE]" } else { "" };
             let fs = if fps_unlimited { " [∞]" } else { "" };
             let rec = if gif_encoder.is_some() { " [REC]" } else { "" };
@@ -1445,13 +1771,23 @@ fn run_gui(arduboy: &mut Arduboy, start_muted: bool, debug: bool, initial_scale:
             let (lr, lg, lb) = arduboy.get_led_state();
             let led = if lr > 0 || lg > 0 || lb > 0 {
                 format!(" LED({},{},{})", lr, lg, lb)
-            } else { String::new() };
+            } else {
+                String::new()
+            };
             let tx = if arduboy.led_tx { " TX" } else { "" };
             let rx = if arduboy.led_rx { " RX" } else { "" };
             let lcd = if lcd_effect { " [LCD]" } else { "" };
             let blr = if blur_enabled { " [BLUR]" } else { "" };
-            let prf = if arduboy.profiler.enabled { " [PROF]" } else { "" };
-            let flt = if arduboy.audio_buf.filters_enabled { " [FILT]" } else { "" };
+            let prf = if arduboy.profiler.enabled {
+                " [PROF]"
+            } else {
+                ""
+            };
+            let flt = if arduboy.audio_buf.filters_enabled {
+                " [FILT]"
+            } else {
+                ""
+            };
             let prt = if portrait { " [PORT]" } else { "" };
             let ntf = if notify_msg.is_some() && Instant::now() < notify_until {
                 format!(" [{}]", notify_msg.as_ref().unwrap())
@@ -1461,8 +1797,24 @@ fn run_gui(arduboy: &mut Arduboy, start_muted: bool, debug: bool, initial_scale:
                 }
                 String::new()
             };
-            window.set_title(&format!("{} - {:.0} FPS{}{}{}{}{}{}{}{}{}{}{}{}{} ({}x)",
-                title_base, fps, ti, ms, fs, rec, led, tx, rx, lcd, blr, prf, flt, prt, ntf, cur_scale,
+            window.set_title(&format!(
+                "{} - {:.0} FPS{}{}{}{}{}{}{}{}{}{}{}{}{} ({}x)",
+                title_base,
+                fps,
+                ti,
+                ms,
+                fs,
+                rec,
+                led,
+                tx,
+                rx,
+                lcd,
+                blr,
+                prf,
+                flt,
+                prt,
+                ntf,
+                cur_scale,
             ));
             fps_frames = 0;
             last_fps_time = Instant::now();
@@ -1475,7 +1827,12 @@ fn run_gui(arduboy: &mut Arduboy, start_muted: bool, debug: bool, initial_scale:
         let gif_data = encoder.finish();
         let fname = format!("recording_{:04}.gif", gif_file_n);
         if let Ok(()) = fs::write(&fname, &gif_data) {
-            eprintln!("GIF saved on exit: {} ({} frames, {} bytes)", fname, frames, gif_data.len());
+            eprintln!(
+                "GIF saved on exit: {} ({} frames, {} bytes)",
+                fname,
+                frames,
+                gif_data.len()
+            );
         }
     }
 
@@ -1486,14 +1843,21 @@ fn run_gui(arduboy: &mut Arduboy, start_muted: bool, debug: bool, initial_scale:
 
     if debug {
         let e = start_time.elapsed().as_secs_f64();
-        eprintln!("{} frames in {:.1}s ({:.1} FPS), {} cycles", frame_count, e, frame_count as f64 / e, arduboy.cpu.tick);
+        eprintln!(
+            "{} frames in {:.1}s ({:.1} FPS), {} cycles",
+            frame_count,
+            e,
+            frame_count as f64 / e,
+            arduboy.cpu.tick
+        );
     }
 }
 
 // ─── Step Mode ──────────────────────────────────────────────────────────────
 
 fn run_step_mode(args: &[String], arduboy: &mut Arduboy) {
-    let max_steps: usize = args.iter()
+    let max_steps: usize = args
+        .iter()
         .position(|a| a == "--frames")
         .and_then(|i| args.get(i + 1))
         .and_then(|s| s.parse().ok())
@@ -1530,7 +1894,9 @@ fn run_step_mode(args: &[String], arduboy: &mut Arduboy) {
         let mut line = String::new();
         print!("dbg> ");
         let _ = std::io::stdout().flush();
-        if stdin.read_line(&mut line).is_err() { break; }
+        if stdin.read_line(&mut line).is_err() {
+            break;
+        }
         let parts: Vec<&str> = line.trim().split_whitespace().collect();
         if parts.is_empty() {
             // Empty line = step 1
@@ -1553,22 +1919,32 @@ fn run_step_mode(args: &[String], arduboy: &mut Arduboy) {
             "r" | "run" => {
                 let limit = if parts.len() > 1 {
                     parts[1].parse().unwrap_or(max_steps)
-                } else { max_steps };
+                } else {
+                    max_steps
+                };
                 for _ in 0..limit {
-                    if !arduboy.breakpoints.is_empty() && arduboy.breakpoints.contains(&arduboy.cpu.pc) {
+                    if !arduboy.breakpoints.is_empty()
+                        && arduboy.breakpoints.contains(&arduboy.cpu.pc)
+                    {
                         println!("*** Breakpoint: {} ***", arduboy.disasm_at_pc());
                         break;
                     }
                     arduboy.step_one();
                     steps += 1;
-                    if check_watch_hit(arduboy) { break; }
+                    if check_watch_hit(arduboy) {
+                        break;
+                    }
                 }
                 println!("{}", arduboy.dump_regs());
                 println!("Next: {}", arduboy.disasm_at_pc());
             }
 
             "f" | "frame" => {
-                let n: usize = if parts.len() > 1 { parts[1].parse().unwrap_or(1) } else { 1 };
+                let n: usize = if parts.len() > 1 {
+                    parts[1].parse().unwrap_or(1)
+                } else {
+                    1
+                };
                 for _ in 0..n {
                     arduboy.run_frame();
                     if arduboy.breakpoint_hit {
@@ -1585,22 +1961,33 @@ fn run_step_mode(args: &[String], arduboy: &mut Arduboy) {
             "ram" => {
                 let addr: u16 = if parts.len() > 1 {
                     parse_cli_hex(parts[1]).unwrap_or(0x100) as u16
-                } else { 0x100 };
+                } else {
+                    0x100
+                };
                 let len: u16 = if parts.len() > 2 {
                     parse_cli_hex(parts[2]).unwrap_or(128) as u16
-                } else { 128 };
+                } else {
+                    128
+                };
                 println!("{}", arduboy.dump_ram(addr, len));
             }
 
             "ramdiff" => {
                 let addr: u16 = if parts.len() > 1 {
                     parse_cli_hex(parts[1]).unwrap_or(0x100) as u16
-                } else { 0x100 };
+                } else {
+                    0x100
+                };
                 let len: u16 = if parts.len() > 2 {
                     parse_cli_hex(parts[2]).unwrap_or(128) as u16
-                } else { 128 };
+                } else {
+                    128
+                };
                 if let Some(ref old) = ram_snapshot {
-                    println!("{}", arduboy_core::debugger::dump_ram_diff(old, &arduboy.mem.data, addr, len));
+                    println!(
+                        "{}",
+                        arduboy_core::debugger::dump_ram_diff(old, &arduboy.mem.data, addr, len)
+                    );
                 } else {
                     println!("No snapshot. Use 'snap' to take a RAM snapshot first.");
                 }
@@ -1624,7 +2011,10 @@ fn run_step_mode(args: &[String], arduboy: &mut Arduboy) {
                     if let Some(addr) = parse_cli_hex(parts[1]) {
                         let word_addr = (addr as u16) / 2;
                         arduboy.breakpoints.push(word_addr);
-                        println!("Breakpoint added: 0x{:04X} (word 0x{:04X})", addr, word_addr);
+                        println!(
+                            "Breakpoint added: 0x{:04X} (word 0x{:04X})",
+                            addr, word_addr
+                        );
                     }
                 } else {
                     println!("Usage: b <hex-byte-addr>");
@@ -1647,7 +2037,9 @@ fn run_step_mode(args: &[String], arduboy: &mut Arduboy) {
                         if idx < arduboy.breakpoints.len() {
                             let removed = arduboy.breakpoints.remove(idx);
                             println!("Removed breakpoint [{}] at 0x{:04X}", idx, removed * 2);
-                        } else { println!("Invalid index."); }
+                        } else {
+                            println!("Invalid index.");
+                        }
                     }
                 }
             }
@@ -1681,13 +2073,18 @@ fn run_step_mode(args: &[String], arduboy: &mut Arduboy) {
                     if let Ok(idx) = parts[1].parse::<usize>() {
                         if arduboy.debugger.remove_watchpoint(idx) {
                             println!("Watchpoint [{}] removed.", idx);
-                        } else { println!("Invalid index."); }
+                        } else {
+                            println!("Invalid index.");
+                        }
                     }
                 }
             }
 
             "prof" => {
-                if parts.len() < 2 { println!("Usage: prof start|stop|report"); continue; }
+                if parts.len() < 2 {
+                    println!("Usage: prof start|stop|report");
+                    continue;
+                }
                 match parts[1] {
                     "start" => {
                         arduboy.profiler.start(arduboy.cpu.tick);
@@ -1710,9 +2107,14 @@ fn run_step_mode(args: &[String], arduboy: &mut Arduboy) {
                 for i in 0..n {
                     let asm = arduboy.step_one();
                     steps += 1;
-                    if n <= 20 { println!("  {}", asm); }
-                    else if i == n - 1 { println!("  ... {} steps, last: {}", n, asm); }
-                    if check_watch_hit(arduboy) { break; }
+                    if n <= 20 {
+                        println!("  {}", asm);
+                    } else if i == n - 1 {
+                        println!("  ... {} steps, last: {}", n, asm);
+                    }
+                    if check_watch_hit(arduboy) {
+                        break;
+                    }
                 }
                 println!("{}", arduboy.dump_regs());
                 println!("Next: {}", arduboy.disasm_at_pc());
@@ -1730,15 +2132,26 @@ fn run_step_mode(args: &[String], arduboy: &mut Arduboy) {
 /// Check and display watchpoint hit, return true if hit.
 fn check_watch_hit(arduboy: &mut Arduboy) -> bool {
     if let Some(hit) = arduboy.debugger.take_hit() {
-        let name = arduboy_core::debugger::io_name(
-            hit.addr, arduboy.cpu_type == CpuType::Atmega328p
-        ).unwrap_or("");
-        println!("*** Watchpoint [{}]: {:?} at 0x{:04X}{} {:02X} → {:02X} ***",
-            hit.index, hit.access, hit.addr,
-            if name.is_empty() { String::new() } else { format!(" ({})", name) },
-            hit.old_val, hit.new_val);
+        let name =
+            arduboy_core::debugger::io_name(hit.addr, arduboy.cpu_type == CpuType::Atmega328p)
+                .unwrap_or("");
+        println!(
+            "*** Watchpoint [{}]: {:?} at 0x{:04X}{} {:02X} → {:02X} ***",
+            hit.index,
+            hit.access,
+            hit.addr,
+            if name.is_empty() {
+                String::new()
+            } else {
+                format!(" ({})", name)
+            },
+            hit.old_val,
+            hit.new_val
+        );
         true
-    } else { false }
+    } else {
+        false
+    }
 }
 
 /// Parse hex string with optional 0x prefix.
@@ -1750,7 +2163,7 @@ fn parse_cli_hex(s: &str) -> Option<u32> {
 // ─── GDB Server Mode ────────────────────────────────────────────────────────
 
 fn run_gdb_mode(arduboy: &mut Arduboy, port: u16, debug: bool) {
-    use arduboy_core::gdb_server::{GdbServer, GdbAction};
+    use arduboy_core::gdb_server::{GdbAction, GdbServer};
 
     let server = GdbServer::bind(port).expect("Failed to bind GDB server");
     eprintln!("Waiting for GDB connection on port {}...", port);
@@ -1759,10 +2172,16 @@ fn run_gdb_mode(arduboy: &mut Arduboy, port: u16, debug: bool) {
     // Initial halt — GDB expects the target to be stopped
     loop {
         let regs = arduboy.gdb_regs();
-        let action = session.process_packet(
-            &regs, arduboy.cpu.sreg, arduboy.cpu.sp, arduboy.cpu.pc,
-            &arduboy.mem.flash, &mut arduboy.mem.data,
-        ).expect("GDB packet error");
+        let action = session
+            .process_packet(
+                &regs,
+                arduboy.cpu.sreg,
+                arduboy.cpu.sp,
+                arduboy.cpu.pc,
+                &arduboy.mem.flash,
+                &mut arduboy.mem.data,
+            )
+            .expect("GDB packet error");
 
         match action {
             GdbAction::Continue => {
@@ -1794,8 +2213,12 @@ fn run_gdb_mode(arduboy: &mut Arduboy, port: u16, debug: bool) {
                         // Read the interrupt byte
                         let regs2 = arduboy.gdb_regs();
                         let _ = session.process_packet(
-                            &regs2, arduboy.cpu.sreg, arduboy.cpu.sp, arduboy.cpu.pc,
-                            &arduboy.mem.flash, &mut arduboy.mem.data,
+                            &regs2,
+                            arduboy.cpu.sreg,
+                            arduboy.cpu.sp,
+                            arduboy.cpu.pc,
+                            &arduboy.mem.flash,
+                            &mut arduboy.mem.data,
                         );
                         break;
                     }
@@ -1804,8 +2227,10 @@ fn run_gdb_mode(arduboy: &mut Arduboy, port: u16, debug: bool) {
 
                 if let Some(wh) = arduboy.debugger.take_hit() {
                     if debug {
-                        eprintln!("GDB: watchpoint hit at 0x{:04X} ({:02X} → {:02X})",
-                            wh.addr, wh.old_val, wh.new_val);
+                        eprintln!(
+                            "GDB: watchpoint hit at 0x{:04X} ({:02X} → {:02X})",
+                            wh.addr, wh.old_val, wh.new_val
+                        );
                     }
                 }
                 session.send_stop_reply().expect("GDB send error");
@@ -1826,20 +2251,24 @@ fn run_gdb_mode(arduboy: &mut Arduboy, port: u16, debug: bool) {
             }
         }
 
-        if session.done { break; }
+        if session.done {
+            break;
+        }
     }
 }
 
 // ─── Headless Mode ──────────────────────────────────────────────────────────
 
 fn run_headless(args: &[String], arduboy: &mut Arduboy, serial_enabled: bool) {
-    let frames: usize = args.iter()
+    let frames: usize = args
+        .iter()
         .position(|a| a == "--frames")
         .and_then(|i| args.get(i + 1))
         .and_then(|s| s.parse().ok())
         .unwrap_or(60);
     let debug = args.iter().any(|a| a == "--debug");
-    let press_frame: Option<usize> = args.iter()
+    let press_frame: Option<usize> = args
+        .iter()
         .position(|a| a == "--press")
         .and_then(|i| args.get(i + 1))
         .and_then(|s| s.parse().ok());
@@ -1848,19 +2277,34 @@ fn run_headless(args: &[String], arduboy: &mut Arduboy, serial_enabled: bool) {
         let mut i = 0;
         while i < args.len() {
             if args[i] == "--snapshot" {
-                if let Some(f) = args.get(i + 1).and_then(|s| s.parse().ok()) { snapshots.push(f); }
+                if let Some(f) = args.get(i + 1).and_then(|s| s.parse().ok()) {
+                    snapshots.push(f);
+                }
                 i += 2;
-            } else { i += 1; }
+            } else {
+                i += 1;
+            }
         }
     }
     if debug {
-        if let Some(pf) = press_frame { println!("Press A on frame {}", pf); }
+        if let Some(pf) = press_frame {
+            println!("Press A on frame {}", pf);
+        }
         println!("Running {} frames...", frames);
     }
     for frame in 0..frames {
         if let Some(pf) = press_frame {
-            if frame == pf { arduboy.set_button(Button::A, true); if debug { println!("  >> A pressed"); } }
-            else if frame == pf + 5 { arduboy.set_button(Button::A, false); if debug { println!("  >> A released"); } }
+            if frame == pf {
+                arduboy.set_button(Button::A, true);
+                if debug {
+                    println!("  >> A pressed");
+                }
+            } else if frame == pf + 5 {
+                arduboy.set_button(Button::A, false);
+                if debug {
+                    println!("  >> A released");
+                }
+            }
         }
         arduboy.display.dbg_reset_counters();
         arduboy.pcd8544.dbg_reset_counters();
@@ -1870,22 +2314,41 @@ fn run_headless(args: &[String], arduboy: &mut Arduboy, serial_enabled: bool) {
         arduboy.run_frame();
         let t1 = arduboy.cpu.tick;
         if arduboy.breakpoint_hit {
-            println!("*** Break: {} (frame {}) ***\n{}", arduboy.disasm_at_pc(), frame+1, arduboy.dump_regs());
+            println!(
+                "*** Break: {} (frame {}) ***\n{}",
+                arduboy.disasm_at_pc(),
+                frame + 1,
+                arduboy.dump_regs()
+            );
             arduboy.breakpoint_hit = false;
             // Check for watchpoint hit
             if let Some(wh) = arduboy.debugger.take_hit() {
                 let name = arduboy_core::debugger::io_name(
-                    wh.addr, arduboy.cpu_type == CpuType::Atmega328p
-                ).unwrap_or("");
-                println!("  Watchpoint [{}]: {:?} at 0x{:04X}{} {:02X} → {:02X}",
-                    wh.index, wh.access, wh.addr,
-                    if name.is_empty() { String::new() } else { format!(" ({})", name) },
-                    wh.old_val, wh.new_val);
+                    wh.addr,
+                    arduboy.cpu_type == CpuType::Atmega328p,
+                )
+                .unwrap_or("");
+                println!(
+                    "  Watchpoint [{}]: {:?} at 0x{:04X}{} {:02X} → {:02X}",
+                    wh.index,
+                    wh.access,
+                    wh.addr,
+                    if name.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" ({})", name)
+                    },
+                    wh.old_val,
+                    wh.new_val
+                );
             }
         }
         if serial_enabled {
             let out = arduboy.take_serial_output();
-            if !out.is_empty() { let _ = std::io::stderr().write_all(&out); let _ = std::io::stderr().flush(); }
+            if !out.is_empty() {
+                let _ = std::io::stderr().write_all(&out);
+                let _ = std::io::stderr().flush();
+            }
         }
         if debug {
             let lit = pixel_count(arduboy);
@@ -1893,10 +2356,20 @@ fn run_headless(args: &[String], arduboy: &mut Arduboy, serial_enabled: bool) {
             let sd = arduboy.display.dbg_data_count + arduboy.pcd8544.dbg_data_count;
             let (lh, rh) = arduboy.get_audio_tone();
             let mut ts = String::new();
-            if lh > 0.0 { ts.push_str(&format!("  L:{:.0}Hz", lh)); }
-            if rh > 0.0 { ts.push_str(&format!("  R:{:.0}Hz", rh)); }
-            let show = frame < 15 || (frame < 100 && frame % 10 == 0) || (frame < 1000 && frame % 100 == 0)
-                || frame == frames - 1 || pxc || sd > 0 || lh > 0.0 || rh > 0.0
+            if lh > 0.0 {
+                ts.push_str(&format!("  L:{:.0}Hz", lh));
+            }
+            if rh > 0.0 {
+                ts.push_str(&format!("  R:{:.0}Hz", rh));
+            }
+            let show = frame < 15
+                || (frame < 100 && frame % 10 == 0)
+                || (frame < 1000 && frame % 100 == 0)
+                || frame == frames - 1
+                || pxc
+                || sd > 0
+                || lh > 0.0
+                || rh > 0.0
                 || press_frame.map_or(false, |pf| frame >= pf && frame < pf + 20);
             if show {
                 println!("  Frame {:3}: +{:6} cyc  px={:4}  t0ovf={:3}  t0int={:3}  spi={:4}  [{}] disp={:?}{}{}",
@@ -1905,30 +2378,45 @@ fn run_headless(args: &[String], arduboy: &mut Arduboy, serial_enabled: bool) {
                     if pxc { "  ***PX" } else { "" }, ts);
             }
         }
-        if snapshots.contains(&(frame+1)) || (debug && frame == frames-1) {
-            println!("\n  === Frame {} ===", frame+1);
+        if snapshots.contains(&(frame + 1)) || (debug && frame == frames - 1) {
+            println!("\n  === Frame {} ===", frame + 1);
             print_display(arduboy);
         }
     }
-    if debug { println!("\nDone. {} cycles.", arduboy.cpu.tick); }
+    if debug {
+        println!("\nDone. {} cycles.", arduboy.cpu.tick);
+    }
 }
 
 fn pixel_count(arduboy: &Arduboy) -> usize {
     let fb = arduboy.framebuffer_rgba();
-    (0..SCREEN_WIDTH * SCREEN_HEIGHT).filter(|&i| fb[i * 4] > 0).count()
+    (0..SCREEN_WIDTH * SCREEN_HEIGHT)
+        .filter(|&i| fb[i * 4] > 0)
+        .count()
 }
 
 fn print_display(arduboy: &Arduboy) {
     let fb = arduboy.framebuffer_rgba();
-    let lit = (0..SCREEN_WIDTH * SCREEN_HEIGHT).filter(|&i| fb[i * 4] > 0).count();
+    let lit = (0..SCREEN_WIDTH * SCREEN_HEIGHT)
+        .filter(|&i| fb[i * 4] > 0)
+        .count();
     println!("  ({} px lit)", lit);
     for y in (0..SCREEN_HEIGHT).step_by(2) {
         let mut l = String::with_capacity(SCREEN_WIDTH + 4);
         l.push_str("  |");
         for x in 0..SCREEN_WIDTH {
             let t = fb[(y * SCREEN_WIDTH + x) * 4] > 128;
-            let b = if y + 1 < SCREEN_HEIGHT { fb[((y+1) * SCREEN_WIDTH + x) * 4] > 128 } else { false };
-            l.push(match (t, b) { (true,true)=>'█', (true,false)=>'▀', (false,true)=>'▄', _=>' ' });
+            let b = if y + 1 < SCREEN_HEIGHT {
+                fb[((y + 1) * SCREEN_WIDTH + x) * 4] > 128
+            } else {
+                false
+            };
+            l.push(match (t, b) {
+                (true, true) => '█',
+                (true, false) => '▀',
+                (false, true) => '▄',
+                _ => ' ',
+            });
         }
         l.push('|');
         println!("{}", l);

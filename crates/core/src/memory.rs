@@ -10,7 +10,7 @@
 //!
 //! Flash (32 KB) and EEPROM (1 KB) are separate address spaces.
 
-use crate::{DATA_SIZE, FLASH_SIZE, EEPROM_SIZE};
+use crate::{DATA_SIZE, EEPROM_SIZE, FLASH_SIZE};
 
 /// AVR memory model containing data space, flash, and EEPROM.
 pub struct Memory {
@@ -135,13 +135,19 @@ impl Memory {
     #[inline(always)]
     pub fn read_raw(&self, addr: u16) -> u8 {
         let a = addr as usize;
-        if a < self.data.len() { self.data[a] } else { 0 }
+        if a < self.data.len() {
+            self.data[a]
+        } else {
+            0
+        }
     }
 
     #[inline(always)]
     pub fn write_raw(&mut self, addr: u16, v: u8) {
         let a = addr as usize;
-        if a < self.data.len() { self.data[a] = v; }
+        if a < self.data.len() {
+            self.data[a] = v;
+        }
     }
 }
 

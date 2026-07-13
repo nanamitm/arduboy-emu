@@ -49,7 +49,9 @@ impl RewindBuffer {
     /// With interval=60 and capacity=300, stores 5 minutes of rewind at 60fps.
     pub fn new(capacity: usize, interval: u32) -> Self {
         let mut buf = Vec::with_capacity(capacity);
-        for _ in 0..capacity { buf.push(None); }
+        for _ in 0..capacity {
+            buf.push(None);
+        }
         RewindBuffer {
             buf,
             write_pos: 0,
@@ -81,7 +83,9 @@ impl RewindBuffer {
 
     /// Pop the most recent snapshot (for rewind). Returns None if empty.
     pub fn pop(&mut self) -> Option<Snapshot> {
-        if self.count == 0 { return None; }
+        if self.count == 0 {
+            return None;
+        }
         // Move write_pos back
         if self.write_pos == 0 {
             self.write_pos = self.buf.len() - 1;
@@ -93,14 +97,20 @@ impl RewindBuffer {
     }
 
     /// Number of stored snapshots.
-    pub fn len(&self) -> usize { self.count }
+    pub fn len(&self) -> usize {
+        self.count
+    }
 
     /// Whether the buffer is empty.
-    pub fn is_empty(&self) -> bool { self.count == 0 }
+    pub fn is_empty(&self) -> bool {
+        self.count == 0
+    }
 
     /// Clear all snapshots.
     pub fn clear(&mut self) {
-        for slot in self.buf.iter_mut() { *slot = None; }
+        for slot in self.buf.iter_mut() {
+            *slot = None;
+        }
         self.count = 0;
         self.write_pos = 0;
         self.frame_counter = 0;
@@ -118,9 +128,15 @@ mod tests {
 
     fn make_snap(frame: u32) -> Snapshot {
         Snapshot {
-            pc: 0, sp: 0, sreg: 0, tick: 0, sleeping: false,
-            data: vec![0; 32], eeprom: vec![0; 16],
-            framebuffer: vec![0; 64], frame,
+            pc: 0,
+            sp: 0,
+            sreg: 0,
+            tick: 0,
+            sleeping: false,
+            data: vec![0; 32],
+            eeprom: vec![0; 16],
+            framebuffer: vec![0; 64],
+            frame,
         }
     }
 
@@ -157,7 +173,9 @@ mod tests {
     #[test]
     fn test_tick_frame() {
         let mut rb = RewindBuffer::new(10, 60);
-        for _ in 0..59 { assert!(!rb.tick_frame()); }
+        for _ in 0..59 {
+            assert!(!rb.tick_frame());
+        }
         assert!(rb.tick_frame()); // 60th frame
     }
 }

@@ -96,8 +96,11 @@ impl Profiler {
 
     /// Get top-N call edges by invocation count.
     pub fn top_calls(&self, n: usize) -> Vec<((u16, u16), u64)> {
-        let mut v: Vec<_> = self.call_graph.iter()
-            .map(|(&edge, &cnt)| (edge, cnt)).collect();
+        let mut v: Vec<_> = self
+            .call_graph
+            .iter()
+            .map(|(&edge, &cnt)| (edge, cnt))
+            .collect();
         v.sort_by(|a, b| b.1.cmp(&a.1));
         v.truncate(n);
         v
@@ -106,7 +109,9 @@ impl Profiler {
     /// Get flat profile: addresses grouped into ranges (basic blocks).
     /// Returns sorted vec of (start_addr, end_addr, total_hits).
     pub fn flat_profile(&self) -> Vec<(u16, u16, u64)> {
-        if self.pc_hits.is_empty() { return vec![]; }
+        if self.pc_hits.is_empty() {
+            return vec![];
+        }
         let mut addrs: Vec<_> = self.pc_hits.keys().copied().collect();
         addrs.sort();
 
@@ -145,29 +150,52 @@ impl Profiler {
         }
 
         s.push_str(&format!("\n--- Top 20 Hotspots ---\n"));
-        s.push_str(&format!("{:>8}  {:>6}  {:>7}  {}\n", "Addr", "Hits", "%", "Instruction"));
+        s.push_str(&format!(
+            "{:>8}  {:>6}  {:>7}  {}\n",
+            "Addr", "Hits", "%", "Instruction"
+        ));
         for (pc, cnt) in self.top_hits(20) {
             let pct = if self.total_instructions > 0 {
                 cnt as f64 / self.total_instructions as f64 * 100.0
-            } else { 0.0 };
+            } else {
+                0.0
+            };
             let byte_addr = (pc as usize) * 2;
             let opcode = if byte_addr + 1 < flash.len() {
                 (flash[byte_addr] as u16) | ((flash[byte_addr + 1] as u16) << 8)
-            } else { 0 };
+            } else {
+                0
+            };
             let next = if byte_addr + 3 < flash.len() {
                 (flash[byte_addr + 2] as u16) | ((flash[byte_addr + 3] as u16) << 8)
-            } else { 0 };
+            } else {
+                0
+            };
             let (inst, _) = crate::opcodes::decode(opcode, next);
             let asm = crate::disasm::disassemble(inst, pc);
-            s.push_str(&format!("0x{:04X}  {:>6}  {:>6.2}%  {}\n", pc * 2, cnt, pct, asm));
+            s.push_str(&format!(
+                "0x{:04X}  {:>6}  {:>6.2}%  {}\n",
+                pc * 2,
+                cnt,
+                pct,
+                asm
+            ));
         }
 
         let calls = self.top_calls(10);
         if !calls.is_empty() {
             s.push_str(&format!("\n--- Top 10 Call Edges ---\n"));
-            s.push_str(&format!("{:>8} → {:>8}  {:>6}\n", "Caller", "Callee", "Count"));
+            s.push_str(&format!(
+                "{:>8} → {:>8}  {:>6}\n",
+                "Caller", "Callee", "Count"
+            ));
             for ((from, to), cnt) in calls {
-                s.push_str(&format!("0x{:04X} → 0x{:04X}  {:>6}\n", from * 2, to * 2, cnt));
+                s.push_str(&format!(
+                    "0x{:04X} → 0x{:04X}  {:>6}\n",
+                    from * 2,
+                    to * 2,
+                    cnt
+                ));
             }
         }
 
@@ -177,9 +205,16 @@ impl Profiler {
             for (start, end, hits) in blocks.iter().take(10) {
                 let pct = if self.total_instructions > 0 {
                     *hits as f64 / self.total_instructions as f64 * 100.0
-                } else { 0.0 };
-                s.push_str(&format!("0x{:04X}–0x{:04X}  {:>6} hits  ({:.1}%)\n",
-                    start * 2, end * 2, hits, pct));
+                } else {
+                    0.0
+                };
+                s.push_str(&format!(
+                    "0x{:04X}–0x{:04X}  {:>6} hits  ({:.1}%)\n",
+                    start * 2,
+                    end * 2,
+                    hits,
+                    pct
+                ));
             }
         }
 
@@ -188,7 +223,9 @@ impl Profiler {
 }
 
 impl Default for Profiler {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]

@@ -11,23 +11,23 @@
 //! - [`EepromCtrl`] — EEPROM read/write controller (save data)
 //! - [`FxFlash`] — W25Q128 16 MB external SPI flash (Arduboy FX game data)
 
-mod timer8;
+mod adc;
+mod eeprom;
+pub mod fx_flash;
+mod pll;
+mod spi;
 mod timer16;
 mod timer4;
-mod spi;
-mod eeprom;
-mod adc;
-mod pll;
-pub mod fx_flash;
+mod timer8;
 
-pub use timer8::{Timer8, Timer8Addrs};
+pub use adc::Adc;
+pub use eeprom::EepromCtrl;
+pub use fx_flash::FxFlash;
+pub use pll::Pll;
+pub use spi::Spi;
 pub use timer16::{Timer16, Timer16Addrs};
 pub use timer4::Timer4;
-pub use spi::Spi;
-pub use eeprom::EepromCtrl;
-pub use adc::Adc;
-pub use pll::Pll;
-pub use fx_flash::FxFlash;
+pub use timer8::{Timer8, Timer8Addrs};
 
 // ─── ATmega32u4 interrupt vector addresses (word addresses) ────────────────
 

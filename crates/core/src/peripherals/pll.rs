@@ -13,7 +13,11 @@ pub struct Pll {
 
 impl Pll {
     pub fn new() -> Self {
-        Pll { pindiv: false, plle: false, plock: false }
+        Pll {
+            pindiv: false,
+            plle: false,
+            plock: false,
+        }
     }
 
     pub fn reset(&mut self) {
@@ -33,12 +37,16 @@ impl Pll {
     /// Capture state for save state.
     pub fn save_state(&self) -> crate::savestate::PllState {
         crate::savestate::PllState {
-            pindiv: self.pindiv, plle: self.plle, plock: self.plock,
+            pindiv: self.pindiv,
+            plle: self.plle,
+            plock: self.plock,
         }
     }
 
     /// Restore state from save state.
     pub fn load_state(&mut self, s: &crate::savestate::PllState) {
-        self.pindiv = s.pindiv; self.plle = s.plle; self.plock = s.plock;
+        self.pindiv = s.pindiv;
+        self.plle = s.plle;
+        self.plock = s.plock;
     }
 }

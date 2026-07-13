@@ -39,16 +39,18 @@ impl GifEncoder {
 
         // Netscape Application Extension (infinite loop)
         data.extend_from_slice(&[
-            0x21, 0xFF, 0x0B,
-            b'N', b'E', b'T', b'S', b'C', b'A', b'P', b'E', b'2', b'.', b'0',
-            0x03, 0x01,
-            0x00, 0x00, // loop count = 0 (infinite)
-            0x00,       // block terminator
+            0x21, 0xFF, 0x0B, b'N', b'E', b'T', b'S', b'C', b'A', b'P', b'E', b'2', b'.', b'0',
+            0x03, 0x01, 0x00, 0x00, // loop count = 0 (infinite)
+            0x00, // block terminator
         ]);
 
         GifEncoder {
-            width, height, delay_cs,
-            data, frame_count: 0, finished: false,
+            width,
+            height,
+            delay_cs,
+            data,
+            frame_count: 0,
+            finished: false,
         }
     }
 
@@ -56,7 +58,9 @@ impl GifEncoder {
     ///
     /// `pixels` must have exactly `width * height` elements.
     pub fn add_frame(&mut self, pixels: &[u8]) {
-        if self.finished { return; }
+        if self.finished {
+            return;
+        }
 
         // Graphic Control Extension
         self.data.push(0x21); // extension introducer
@@ -84,7 +88,8 @@ impl GifEncoder {
         while pos < compressed.len() {
             let block_size = (compressed.len() - pos).min(255);
             self.data.push(block_size as u8);
-            self.data.extend_from_slice(&compressed[pos..pos + block_size]);
+            self.data
+                .extend_from_slice(&compressed[pos..pos + block_size]);
             pos += block_size;
         }
         self.data.push(0x00); // block terminator
@@ -184,7 +189,11 @@ struct BitWriter {
 
 impl BitWriter {
     fn new() -> Self {
-        BitWriter { data: Vec::with_capacity(8192), current: 0, bits: 0 }
+        BitWriter {
+            data: Vec::with_capacity(8192),
+            current: 0,
+            bits: 0,
+        }
     }
 
     fn write_bits(&mut self, value: u32, num_bits: u32) {

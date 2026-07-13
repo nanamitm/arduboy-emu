@@ -96,7 +96,9 @@ pub extern "C" fn abemu_new() -> *mut Emu {
 #[no_mangle]
 pub extern "C" fn abemu_free(h: *mut Emu) {
     if !h.is_null() {
-        unsafe { drop(Box::from_raw(h)); }
+        unsafe {
+            drop(Box::from_raw(h));
+        }
     }
 }
 
@@ -125,7 +127,9 @@ fn auto_find_fx(rom_path: &str) -> Option<Vec<u8>> {
             return Some(d);
         }
     }
-    let dir = Path::new(rom_path).parent().unwrap_or_else(|| Path::new("."));
+    let dir = Path::new(rom_path)
+        .parent()
+        .unwrap_or_else(|| Path::new("."));
     let stem = Path::new(rom_path)
         .file_stem()
         .and_then(|s| s.to_str())
@@ -143,7 +147,9 @@ fn eeprom_path(rom_path: &str) -> String {
     let p = Path::new(rom_path);
     let dir = p.parent().unwrap_or_else(|| Path::new("."));
     let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("game");
-    dir.join(format!("{}.eep", stem)).to_string_lossy().into_owned()
+    dir.join(format!("{}.eep", stem))
+        .to_string_lossy()
+        .into_owned()
 }
 
 /// Load a ROM by path, auto-detecting the format from its extension:
@@ -200,7 +206,13 @@ pub extern "C" fn abemu_load_file(h: *mut Emu, path: *const c_char) -> c_int {
                 return -1;
             }
         };
-        (String::new(), Some(data), auto_find_fx(&path), None, String::new())
+        (
+            String::new(),
+            Some(data),
+            auto_find_fx(&path),
+            None,
+            String::new(),
+        )
     } else {
         let hex = match std::fs::read_to_string(&path) {
             Ok(s) => s,
@@ -422,18 +434,19 @@ pub extern "C" fn abemu_render_audio(
 
 /// Read the RGB LED state (0–255 each). Any pointer may be null to skip it.
 #[no_mangle]
-pub extern "C" fn abemu_led_rgb(
-    h: *mut Emu,
-    r: *mut c_uchar,
-    g: *mut c_uchar,
-    b: *mut c_uchar,
-) {
+pub extern "C" fn abemu_led_rgb(h: *mut Emu, r: *mut c_uchar, g: *mut c_uchar, b: *mut c_uchar) {
     if let Some(e) = unsafe { handle(h) } {
         let (rr, gg, bb) = e.ard.get_led_state();
         unsafe {
-            if !r.is_null() { *r = rr; }
-            if !g.is_null() { *g = gg; }
-            if !b.is_null() { *b = bb; }
+            if !r.is_null() {
+                *r = rr;
+            }
+            if !g.is_null() {
+                *g = gg;
+            }
+            if !b.is_null() {
+                *b = bb;
+            }
         }
     }
 }

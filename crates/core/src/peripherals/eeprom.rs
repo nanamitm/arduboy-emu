@@ -13,6 +13,8 @@
 pub struct EepromCtrl;
 
 impl EepromCtrl {
-    pub fn new() -> Self { EepromCtrl }
+    pub fn new() -> Self {
+        EepromCtrl
+    }
     pub fn reset(&mut self) {}
 }

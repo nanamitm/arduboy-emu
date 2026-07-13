@@ -36,29 +36,29 @@
 //! Stereo output: Speaker 1 (PC6 on 32u4, PD3 on 328P) → left channel,
 //! Speaker 2 (PB5) → right channel.
 
+pub mod arduboy_file;
+pub mod audio_buffer;
 pub mod cpu;
+pub mod debugger;
+pub mod disasm;
+pub mod display;
+pub mod elf;
+pub mod gdb_server;
+pub mod gif;
+pub mod hex;
 pub mod memory;
 pub mod opcodes;
-pub mod display;
 pub mod pcd8544;
-pub mod hex;
 pub mod peripherals;
-pub mod disasm;
-pub mod audio_buffer;
-pub mod arduboy_file;
 pub mod png;
-pub mod gif;
 pub mod profiler;
-pub mod debugger;
-pub mod gdb_server;
-pub mod elf;
-pub mod snapshot;
 pub mod savestate;
+pub mod snapshot;
 
+pub use audio_buffer::AudioBuffer;
 pub use cpu::Cpu;
 pub use display::Ssd1306;
 pub use memory::Memory;
-pub use audio_buffer::AudioBuffer;
 
 // ATmega32u4 constants
 /// Flash memory size: 32 KB
@@ -283,16 +283,26 @@ impl Arduboy {
         // Timer0: same register addresses on both chips, different interrupt vectors
         let timer0_addrs = match cpu_type {
             CpuType::Atmega32u4 => peripherals::Timer8Addrs {
-                tifr: 0x35, tccr_a: 0x44, tccr_b: 0x45,
-                ocr_a: 0x47, ocr_b: 0x48, timsk: 0x6E, tcnt: 0x46,
+                tifr: 0x35,
+                tccr_a: 0x44,
+                tccr_b: 0x45,
+                ocr_a: 0x47,
+                ocr_b: 0x48,
+                timsk: 0x6E,
+                tcnt: 0x46,
                 int_ovf: peripherals::INT_TIMER0_OVF,
                 int_compa: peripherals::INT_TIMER0_COMPA,
                 int_compb: peripherals::INT_TIMER0_COMPB,
                 is_timer2: false,
             },
             CpuType::Atmega328p => peripherals::Timer8Addrs {
-                tifr: 0x35, tccr_a: 0x44, tccr_b: 0x45,
-                ocr_a: 0x47, ocr_b: 0x48, timsk: 0x6E, tcnt: 0x46,
+                tifr: 0x35,
+                tccr_a: 0x44,
+                tccr_b: 0x45,
+                ocr_a: 0x47,
+                ocr_b: 0x48,
+                timsk: 0x6E,
+                tcnt: 0x46,
                 int_ovf: peripherals::INT_328P_TIMER0_OVF,
                 int_compa: peripherals::INT_328P_TIMER0_COMPA,
                 int_compb: peripherals::INT_328P_TIMER0_COMPB,
@@ -303,20 +313,38 @@ impl Arduboy {
         // Timer1: same register addresses, different vectors
         let timer1_addrs = match cpu_type {
             CpuType::Atmega32u4 => peripherals::Timer16Addrs {
-                tifr: 0x36, tccr_a: 0x80, tccr_b: 0x81, tccr_c: 0x82,
-                ocr_ah: 0x89, ocr_al: 0x88, ocr_bh: 0x8B, ocr_bl: 0x8A,
-                ocr_ch: 0x8D, ocr_cl: 0x8C,
-                timsk: 0x6F, tcnth: 0x85, tcntl: 0x84,
+                tifr: 0x36,
+                tccr_a: 0x80,
+                tccr_b: 0x81,
+                tccr_c: 0x82,
+                ocr_ah: 0x89,
+                ocr_al: 0x88,
+                ocr_bh: 0x8B,
+                ocr_bl: 0x8A,
+                ocr_ch: 0x8D,
+                ocr_cl: 0x8C,
+                timsk: 0x6F,
+                tcnth: 0x85,
+                tcntl: 0x84,
                 int_ovf: peripherals::INT_TIMER1_OVF,
                 int_compa: peripherals::INT_TIMER1_COMPA,
                 int_compb: peripherals::INT_TIMER1_COMPB,
                 int_compc: peripherals::INT_TIMER1_COMPC,
             },
             CpuType::Atmega328p => peripherals::Timer16Addrs {
-                tifr: 0x36, tccr_a: 0x80, tccr_b: 0x81, tccr_c: 0x82,
-                ocr_ah: 0x89, ocr_al: 0x88, ocr_bh: 0x8B, ocr_bl: 0x8A,
-                ocr_ch: 0x8D, ocr_cl: 0x8C, // 328P has no OCR1C but addr harmless
-                timsk: 0x6F, tcnth: 0x85, tcntl: 0x84,
+                tifr: 0x36,
+                tccr_a: 0x80,
+                tccr_b: 0x81,
+                tccr_c: 0x82,
+                ocr_ah: 0x89,
+                ocr_al: 0x88,
+                ocr_bh: 0x8B,
+                ocr_bl: 0x8A,
+                ocr_ch: 0x8D,
+                ocr_cl: 0x8C, // 328P has no OCR1C but addr harmless
+                timsk: 0x6F,
+                tcnth: 0x85,
+                tcntl: 0x84,
                 int_ovf: peripherals::INT_328P_TIMER1_OVF,
                 int_compa: peripherals::INT_328P_TIMER1_COMPA,
                 int_compb: peripherals::INT_328P_TIMER1_COMPB,
@@ -326,10 +354,19 @@ impl Arduboy {
 
         // Timer3: ATmega32u4 only
         let timer3_addrs = peripherals::Timer16Addrs {
-            tifr: 0x38, tccr_a: 0x90, tccr_b: 0x91, tccr_c: 0x92,
-            ocr_ah: 0x99, ocr_al: 0x98, ocr_bh: 0x9B, ocr_bl: 0x9A,
-            ocr_ch: 0x9D, ocr_cl: 0x9C,
-            timsk: 0x71, tcnth: 0x94, tcntl: 0x95,
+            tifr: 0x38,
+            tccr_a: 0x90,
+            tccr_b: 0x91,
+            tccr_c: 0x92,
+            ocr_ah: 0x99,
+            ocr_al: 0x98,
+            ocr_bh: 0x9B,
+            ocr_bl: 0x9A,
+            ocr_ch: 0x9D,
+            ocr_cl: 0x9C,
+            timsk: 0x71,
+            tcnth: 0x94,
+            tcntl: 0x95,
             int_ovf: peripherals::INT_TIMER3_OVF,
             int_compa: peripherals::INT_TIMER3_COMPA,
             int_compb: peripherals::INT_TIMER3_COMPB,
@@ -338,8 +375,13 @@ impl Arduboy {
 
         // Timer2: ATmega328P only (8-bit, different addresses from Timer0)
         let timer2_addrs = peripherals::Timer8Addrs {
-            tifr: 0x37, tccr_a: 0xB0, tccr_b: 0xB1,
-            ocr_a: 0xB3, ocr_b: 0xB4, timsk: 0x70, tcnt: 0xB2,
+            tifr: 0x37,
+            tccr_a: 0xB0,
+            tccr_b: 0xB1,
+            ocr_a: 0xB3,
+            ocr_b: 0xB4,
+            timsk: 0x70,
+            tcnt: 0xB2,
             int_ovf: peripherals::INT_328P_TIMER2_OVF,
             int_compa: peripherals::INT_328P_TIMER2_COMPA,
             int_compb: peripherals::INT_328P_TIMER2_COMPB,
@@ -361,18 +403,34 @@ impl Arduboy {
             eeprom_ctrl: peripherals::EepromCtrl::new(),
             fx_flash: peripherals::FxFlash::new(),
             spdr_in: 0,
-            pin_b: 0xFF, pin_c: 0xFF, pin_d: 0xFF, pin_e: 0xFF, pin_f: 0xFF,
+            pin_b: 0xFF,
+            pin_c: 0xFF,
+            pin_d: 0xFF,
+            pin_e: 0xFF,
+            pin_f: 0xFF,
             spi_out: Vec::new(),
             rng_state: 0xDEAD_BEEF,
             dbg_spdr_writes: 0,
-            display_type: if cpu_type == CpuType::Atmega328p { DisplayType::Pcd8544 } else { DisplayType::Unknown },
+            display_type: if cpu_type == CpuType::Atmega328p {
+                DisplayType::Pcd8544
+            } else {
+                DisplayType::Unknown
+            },
             pcd8544: pcd8544::Pcd8544::new(),
             frame_count: 0,
             fx_cs_prev: true,
             // Default Gamebuino Classic pin mapping: DC=PC2(A2), CS=PC1(A1)
             // Auto-detection in flush_spi may override these.
-            pcd_cs_bit: if cpu_type == CpuType::Atmega328p { 1 } else { 0xFF },
-            pcd_dc_bit: if cpu_type == CpuType::Atmega328p { 2 } else { 0xFF },
+            pcd_cs_bit: if cpu_type == CpuType::Atmega328p {
+                1
+            } else {
+                0xFF
+            },
+            pcd_dc_bit: if cpu_type == CpuType::Atmega328p {
+                2
+            } else {
+                0xFF
+            },
             dbg_fx_transfers: 0,
             dbg_fx_cs_count: 0,
             dbg_fx_bytes_in_cs: 0,
@@ -505,8 +563,16 @@ impl Arduboy {
         self.spdr_in = 0;
         self.fx_cs_prev = true;
         // Default Gamebuino Classic: DC=PC2, CS=PC1
-        self.pcd_cs_bit = if self.cpu_type == CpuType::Atmega328p { 1 } else { 0xFF };
-        self.pcd_dc_bit = if self.cpu_type == CpuType::Atmega328p { 2 } else { 0xFF };
+        self.pcd_cs_bit = if self.cpu_type == CpuType::Atmega328p {
+            1
+        } else {
+            0xFF
+        };
+        self.pcd_dc_bit = if self.cpu_type == CpuType::Atmega328p {
+            2
+        } else {
+            0xFF
+        };
         self.dbg_fx_transfers = 0;
         self.dbg_fx_cs_count = 0;
         self.dbg_fx_bytes_in_cs = 0;
@@ -545,28 +611,36 @@ impl Arduboy {
                 // UP=PF7, DOWN=PF4, LEFT=PF5, RIGHT=PF6, A=PE6, B=PB4
                 if self.display_type != DisplayType::Pcd8544 {
                     let (pin, bit): (&mut u8, u8) = match btn {
-                        Button::Up    => (&mut self.pin_f, 7),
-                        Button::Down  => (&mut self.pin_f, 4),
-                        Button::Left  => (&mut self.pin_f, 5),
+                        Button::Up => (&mut self.pin_f, 7),
+                        Button::Down => (&mut self.pin_f, 4),
+                        Button::Left => (&mut self.pin_f, 5),
                         Button::Right => (&mut self.pin_f, 6),
-                        Button::A     => (&mut self.pin_e, 6),
-                        Button::B     => (&mut self.pin_b, 4),
+                        Button::A => (&mut self.pin_e, 6),
+                        Button::B => (&mut self.pin_b, 4),
                     };
-                    if pressed { *pin &= !(1 << bit); } else { *pin |= 1 << bit; }
+                    if pressed {
+                        *pin &= !(1 << bit);
+                    } else {
+                        *pin |= 1 << bit;
+                    }
                 }
 
                 // --- Gamebuino pin mapping (32u4 with PCD8544) ---
                 // UP=PB5(9), DOWN=PD7(6), LEFT=PB4(8), RIGHT=PE6(7), A=PD4(4), B=PD1(2)
                 if self.display_type != DisplayType::Ssd1306 {
                     let (pin2, bit2): (&mut u8, u8) = match btn {
-                        Button::Up    => (&mut self.pin_b, 5),
-                        Button::Down  => (&mut self.pin_d, 7),
-                        Button::Left  => (&mut self.pin_b, 4),
+                        Button::Up => (&mut self.pin_b, 5),
+                        Button::Down => (&mut self.pin_d, 7),
+                        Button::Left => (&mut self.pin_b, 4),
                         Button::Right => (&mut self.pin_e, 6),
-                        Button::A     => (&mut self.pin_d, 4),
-                        Button::B     => (&mut self.pin_d, 1),
+                        Button::A => (&mut self.pin_d, 4),
+                        Button::B => (&mut self.pin_d, 1),
                     };
-                    if pressed { *pin2 &= !(1 << bit2); } else { *pin2 |= 1 << bit2; }
+                    if pressed {
+                        *pin2 &= !(1 << bit2);
+                    } else {
+                        *pin2 |= 1 << bit2;
+                    }
                 }
             }
             CpuType::Atmega328p => {
@@ -574,14 +648,18 @@ impl Arduboy {
                 // UP=PB1(D9), DOWN=PD6(D6), LEFT=PB0(D8), RIGHT=PD7(D7)
                 // A=PD4(D4), B=PD2(D2)
                 let (pin, bit): (&mut u8, u8) = match btn {
-                    Button::Up    => (&mut self.pin_b, 1),
-                    Button::Down  => (&mut self.pin_d, 6),
-                    Button::Left  => (&mut self.pin_b, 0),
+                    Button::Up => (&mut self.pin_b, 1),
+                    Button::Down => (&mut self.pin_d, 6),
+                    Button::Left => (&mut self.pin_b, 0),
                     Button::Right => (&mut self.pin_d, 7),
-                    Button::A     => (&mut self.pin_d, 4),
-                    Button::B     => (&mut self.pin_d, 2),
+                    Button::A => (&mut self.pin_d, 4),
+                    Button::B => (&mut self.pin_d, 2),
                 };
-                if pressed { *pin &= !(1 << bit); } else { *pin |= 1 << bit; }
+                if pressed {
+                    *pin &= !(1 << bit);
+                } else {
+                    *pin |= 1 << bit;
+                }
             }
         }
     }
@@ -596,8 +674,11 @@ impl Arduboy {
         self.audio_buf.begin_frame(self.cpu.tick);
 
         // PC sampling for stuck detection (debug only)
-        let mut pc_counts: Option<std::collections::HashMap<u16, u32>> =
-            if self.debug { Some(std::collections::HashMap::new()) } else { None };
+        let mut pc_counts: Option<std::collections::HashMap<u16, u32>> = if self.debug {
+            Some(std::collections::HashMap::new())
+        } else {
+            None
+        };
         let mut last_sample = self.cpu.tick;
 
         while self.cpu.tick < end_tick {
@@ -618,14 +699,14 @@ impl Arduboy {
                     self.breakpoint_hit = true;
                     return;
                 }
-                
+
                 if let Some(ref mut counts) = pc_counts {
                     if self.cpu.tick - last_sample >= 64 {
                         last_sample = self.cpu.tick;
                         *counts.entry(self.cpu.pc).or_insert(0) += 1;
                     }
                 }
-                
+
                 self.step();
             } else {
                 self.cpu.tick += 4;
@@ -642,9 +723,9 @@ impl Arduboy {
 
         // End sample-accurate audio recording for this frame
         self.audio_buf.end_frame(self.cpu.tick);
-        
+
         self.frame_count += 1;
-        
+
         // Per-frame diagnostics (first 10 frames)
         if self.debug && self.frame_count <= 10 {
             eprintln!("Frame {}: SPI={} FX={} disp_cmd={} disp_data={} sleeping={} pc=0x{:04X} display_type={:?}",
@@ -671,17 +752,22 @@ impl Arduboy {
                 self.mem.data[0x2A], self.mem.data[0x2B],
                 self.display_type);
         }
-        
+
         if let Some(pc_counts) = pc_counts {
             if self.frame_count <= 5 && !pc_counts.is_empty() {
                 let mut top: Vec<_> = pc_counts.into_iter().collect();
                 top.sort_by(|a, b| b.1.cmp(&a.1));
-                let top5: Vec<String> = top.iter().take(5)
+                let top5: Vec<String> = top
+                    .iter()
+                    .take(5)
                     .map(|(pc, cnt)| {
                         let byte_addr = (*pc as usize) * 2;
                         let opcode = if byte_addr + 1 < self.mem.flash.len() {
-                            (self.mem.flash[byte_addr] as u16) | ((self.mem.flash[byte_addr + 1] as u16) << 8)
-                        } else { 0 };
+                            (self.mem.flash[byte_addr] as u16)
+                                | ((self.mem.flash[byte_addr + 1] as u16) << 8)
+                        } else {
+                            0
+                        };
                         format!("0x{:04X}(op=0x{:04X})x{}", pc, opcode, cnt)
                     })
                     .collect();
@@ -739,7 +825,9 @@ impl Arduboy {
         let word = self.mem.read_program_word(pc as usize);
         let next_word = if (pc as usize) + 1 < FLASH_SIZE / 2 {
             self.mem.read_program_word(pc as usize + 1)
-        } else { 0 };
+        } else {
+            0
+        };
         let (inst, size) = opcodes::decode(word, next_word);
         let asm = disasm::disassemble(inst, pc);
         let cycles = self.execute_inst(inst, size);
@@ -756,7 +844,9 @@ impl Arduboy {
         let word = self.mem.read_program_word(pc as usize);
         let next_word = if (pc as usize) + 1 < FLASH_SIZE / 2 {
             self.mem.read_program_word(pc as usize + 1)
-        } else { 0 };
+        } else {
+            0
+        };
         let (inst, _) = opcodes::decode(word, next_word);
         let asm = disasm::disassemble(inst, pc);
         format!("0x{:04X}: {}", pc * 2, asm)
@@ -766,14 +856,24 @@ impl Arduboy {
     pub fn dump_regs(&self) -> String {
         let mut s = String::new();
         for i in 0..32 {
-            if i % 8 == 0 && i > 0 { s.push('\n'); }
+            if i % 8 == 0 && i > 0 {
+                s.push('\n');
+            }
             s.push_str(&format!("R{:2}={:02X} ", i, self.mem.data[i]));
         }
-        s.push_str(&format!("\nPC={:04X} SP={:04X} SREG={} (0x{:02X})",
-            self.cpu.pc * 2, self.cpu.sp,
-            disasm::format_sreg(self.cpu.sreg), self.cpu.sreg));
-        s.push_str(&format!("\nX={:04X} Y={:04X} Z={:04X}",
-            self.mem.x(), self.mem.y(), self.mem.z()));
+        s.push_str(&format!(
+            "\nPC={:04X} SP={:04X} SREG={} (0x{:02X})",
+            self.cpu.pc * 2,
+            self.cpu.sp,
+            disasm::format_sreg(self.cpu.sreg),
+            self.cpu.sreg
+        ));
+        s.push_str(&format!(
+            "\nX={:04X} Y={:04X} Z={:04X}",
+            self.mem.x(),
+            self.mem.y(),
+            self.mem.z()
+        ));
         s
     }
 
@@ -837,27 +937,32 @@ impl Arduboy {
         // For output pins (DDRx bit = 1): return PORTx value
         // For input pins (DDRx bit = 0): return pin_x (external input/buttons)
         match addr {
-            0x23 => { // PINB
+            0x23 => {
+                // PINB
                 let ddr = self.mem.data[0x24];
                 let port = self.mem.data[0x25];
                 return (port & ddr) | (self.pin_b & !ddr);
             }
-            0x26 => { // PINC
+            0x26 => {
+                // PINC
                 let ddr = self.mem.data[0x27];
                 let port = self.mem.data[0x28];
                 return (port & ddr) | (self.pin_c & !ddr);
             }
-            0x29 => { // PIND
+            0x29 => {
+                // PIND
                 let ddr = self.mem.data[0x2A];
                 let port = self.mem.data[0x2B];
                 return (port & ddr) | (self.pin_d & !ddr);
             }
-            0x2C => { // PINE
+            0x2C => {
+                // PINE
                 let ddr = self.mem.data[0x2D];
                 let port = self.mem.data[0x2E];
                 return (port & ddr) | (self.pin_e & !ddr);
             }
-            0x2F => { // PINF
+            0x2F => {
+                // PINF
                 let ddr = self.mem.data[0x30];
                 let port = self.mem.data[0x31];
                 return (port & ddr) | (self.pin_f & !ddr);
@@ -910,15 +1015,17 @@ impl Arduboy {
         // USB Serial register reads (ATmega32u4 only)
         if self.cpu_type == CpuType::Atmega32u4 {
             match addr {
-                0xE8 => { // UEINTX - always report ready to send
+                0xE8 => {
+                    // UEINTX - always report ready to send
                     return 0xA1;
                 }
                 0xE9 => return self.usb_uenum, // UENUM
-                0xEE => return 0x61, // UESTA0X
-                0xEF => return 0x00, // UESTA1X
-                0xF2 => return 0x40, // UEBCLX
-                0xF3 => return 0x00, // UEBCHX
-                0xD8 => { // USBCON
+                0xEE => return 0x61,           // UESTA0X
+                0xEF => return 0x00,           // UESTA1X
+                0xF2 => return 0x40,           // UEBCLX
+                0xF3 => return 0x00,           // UEBCHX
+                0xD8 => {
+                    // USBCON
                     return if self.usb_configured { 0x80 } else { 0 };
                 }
                 0xD9 => return 0x08, // USBSTA
@@ -930,11 +1037,12 @@ impl Arduboy {
         // USART0 register reads (ATmega328P only)
         if self.cpu_type == CpuType::Atmega328p {
             match addr {
-                0xC0 => { // UCSR0A — always report UDRE0=1 (ready), TXC0
+                0xC0 => {
+                    // UCSR0A — always report UDRE0=1 (ready), TXC0
                     return 0x20 | (self.mem.data[0xC0] & 0x40);
                 }
                 0xC1 => return self.mem.data[0xC1], // UCSR0B
-                0xC6 => return 0x00, // UDR0 — no receive data
+                0xC6 => return 0x00,                // UDR0 — no receive data
                 _ => {}
             }
         }
@@ -953,7 +1061,11 @@ impl Arduboy {
     /// Write to data space with peripheral hooks
     pub fn write_data(&mut self, addr: u16, value: u8) {
         let a = addr as usize;
-        let old = if a < self.mem.data.len() { self.mem.data[a] } else { 0 };
+        let old = if a < self.mem.data.len() {
+            self.mem.data[a]
+        } else {
+            0
+        };
 
         // Watchpoint check (fast path: skip if no watchpoints)
         if !self.debugger.watchpoints.is_empty() {
@@ -962,30 +1074,35 @@ impl Arduboy {
 
         // PINx toggle writes: writing 1 to PINx bit toggles PORTx bit
         match addr {
-            0x23 => { // PINB → toggles PORTB
+            0x23 => {
+                // PINB → toggles PORTB
                 let new_portb = self.mem.data[0x25] ^ value;
                 // Re-invoke write_data for PORTB so speaker/LED side effects fire
                 self.write_data(0x25, new_portb);
                 return;
             }
-            0x26 => { // PINC → toggles PORTC
+            0x26 => {
+                // PINC → toggles PORTC
                 let new_portc = self.mem.data[0x28] ^ value;
                 // Re-invoke write_data for PORTC so speaker side effects fire
                 self.write_data(0x28, new_portc);
                 return;
             }
-            0x29 => { // PIND → toggles PORTD
+            0x29 => {
+                // PIND → toggles PORTD
                 let new_portd = self.mem.data[0x2B] ^ value;
                 // Re-invoke write_data for PORTD so all side effects fire
                 self.write_data(0x2B, new_portd);
                 return;
             }
-            0x2C => { // PINE → toggles PORTE
+            0x2C => {
+                // PINE → toggles PORTE
                 let new_porte = self.mem.data[0x2E] ^ value;
                 self.write_data(0x2E, new_porte);
                 return;
             }
-            0x2F => { // PINF → toggles PORTF
+            0x2F => {
+                // PINF → toggles PORTF
                 let new_portf = self.mem.data[0x31] ^ value;
                 self.write_data(0x31, new_portf);
                 return;
@@ -995,7 +1112,8 @@ impl Arduboy {
 
         // GPIO DDR/PORT writes - track pin changes
         match addr {
-            0x24 | 0x25 => { // DDRB, PORTB
+            0x24 | 0x25 => {
+                // DDRB, PORTB
                 if a < self.mem.data.len() {
                     // Detect PB5 (speaker pin 2) transitions for GPIO-driven audio
                     if addr == 0x25 {
@@ -1022,18 +1140,22 @@ impl Arduboy {
                     // RGB LED digital: Blue=PB5, Red=PB6, Green=PB7 (active-high)
                     self.led_rgb.2 = if value & (1 << 5) != 0 { 255 } else { 0 }; // Blue
                     self.led_rgb.0 = if value & (1 << 6) != 0 { 255 } else { 0 }; // Red
-                    self.led_rgb.1 = if value & (1 << 7) != 0 { 255 } else { 0 }; // Green
+                    self.led_rgb.1 = if value & (1 << 7) != 0 { 255 } else { 0 };
+                    // Green
                 }
                 return;
             }
-            0x27 | 0x28 => { // DDRC, PORTC
+            0x27 | 0x28 => {
+                // DDRC, PORTC
                 if a < self.mem.data.len() {
                     // Trace PORTC/DDRC writes for diagnostics
                     if self.spi_trace_enabled && self.spi_trace.len() < 200 {
                         let old = self.mem.data[a];
                         let reg_name = if addr == 0x28 { "PORTC" } else { "DDRC" };
-                        self.spi_trace.push(format!("{}_WRITE old=0x{:02X} new=0x{:02X} PC=0x{:04X}",
-                            reg_name, old, value, self.cpu.pc));
+                        self.spi_trace.push(format!(
+                            "{}_WRITE old=0x{:02X} new=0x{:02X} PC=0x{:04X}",
+                            reg_name, old, value, self.cpu.pc
+                        ));
                     }
                     // Detect PC6 (speaker pin 1) transitions for GPIO-driven audio
                     if addr == 0x28 {
@@ -1059,12 +1181,18 @@ impl Arduboy {
                 }
                 return;
             }
-            0x2A => { // DDRD
-                if a < self.mem.data.len() { self.mem.data[a] = value; }
+            0x2A => {
+                // DDRD
+                if a < self.mem.data.len() {
+                    self.mem.data[a] = value;
+                }
                 return;
             }
-            0x2B => { // PORTD
-                if a < self.mem.data.len() { self.mem.data[a] = value; }
+            0x2B => {
+                // PORTD
+                if a < self.mem.data.len() {
+                    self.mem.data[a] = value;
+                }
                 // TX LED = PD5 (active-low)
                 self.led_tx = value & (1 << 5) == 0;
 
@@ -1093,8 +1221,10 @@ impl Arduboy {
                     let new_cs_high = value & (1 << 1) != 0;
                     if new_cs_high && !self.fx_cs_prev {
                         if self.debug && self.dbg_fx_cs_count < 20 {
-                            eprintln!("  FX CS↑ (deselect) after {} SPI bytes, state={:?}",
-                                self.dbg_fx_bytes_in_cs, self.fx_flash.state);
+                            eprintln!(
+                                "  FX CS↑ (deselect) after {} SPI bytes, state={:?}",
+                                self.dbg_fx_bytes_in_cs, self.fx_flash.state
+                            );
                         }
                         self.fx_flash.deselect();
                         self.dbg_fx_cs_count += 1;
@@ -1110,12 +1240,18 @@ impl Arduboy {
                 }
                 return;
             }
-            0x2D | 0x2E => { // DDRE, PORTE
-                if a < self.mem.data.len() { self.mem.data[a] = value; }
+            0x2D | 0x2E => {
+                // DDRE, PORTE
+                if a < self.mem.data.len() {
+                    self.mem.data[a] = value;
+                }
                 return;
             }
-            0x30 | 0x31 => { // DDRF, PORTF
-                if a < self.mem.data.len() { self.mem.data[a] = value; }
+            0x30 | 0x31 => {
+                // DDRF, PORTF
+                if a < self.mem.data.len() {
+                    self.mem.data[a] = value;
+                }
                 return;
             }
             _ => {}
@@ -1125,32 +1261,46 @@ impl Arduboy {
         match addr {
             SPH_ADDR => {
                 self.cpu.sp = (self.cpu.sp & 0x00FF) | ((value as u16) << 8);
-                if a < self.mem.data.len() { self.mem.data[a] = value; }
+                if a < self.mem.data.len() {
+                    self.mem.data[a] = value;
+                }
                 return;
             }
             SPL_ADDR => {
                 self.cpu.sp = (self.cpu.sp & 0xFF00) | value as u16;
-                if a < self.mem.data.len() { self.mem.data[a] = value; }
+                if a < self.mem.data.len() {
+                    self.mem.data[a] = value;
+                }
                 return;
             }
             SREG_ADDR => {
                 self.cpu.sreg = value;
-                if a < self.mem.data.len() { self.mem.data[a] = value; }
+                if a < self.mem.data.len() {
+                    self.mem.data[a] = value;
+                }
                 return;
             }
             _ => {}
         }
 
         // Timer0 writes
-        if self.timer0.write(addr, value, old, &mut self.mem.data) { return; }
+        if self.timer0.write(addr, value, old, &mut self.mem.data) {
+            return;
+        }
         // Timer1 writes
-        if self.timer1.write(addr, value, old, &mut self.mem.data) { return; }
+        if self.timer1.write(addr, value, old, &mut self.mem.data) {
+            return;
+        }
         // Timer3 writes
-        if self.timer3.write(addr, value, old, &mut self.mem.data) { return; }
+        if self.timer3.write(addr, value, old, &mut self.mem.data) {
+            return;
+        }
         // Timer4 writes (ATmega32u4 only)
         if self.cpu_type == CpuType::Atmega32u4 {
             if self.timer4.write(addr, value) {
-                if a < self.mem.data.len() { self.mem.data[a] = value; }
+                if a < self.mem.data.len() {
+                    self.mem.data[a] = value;
+                }
                 return;
             }
         }
@@ -1177,22 +1327,24 @@ impl Arduboy {
         // SPI writes
         if self.spi.write(addr, value) {
             // Store value in mem.data so reads return correct value
-            if a < self.mem.data.len() { self.mem.data[a] = value; }
+            if a < self.mem.data.len() {
+                self.mem.data[a] = value;
+            }
             // If SPDR written, data goes to SPI output with current DC state
             if addr == 0x4E {
                 let portd = self.mem.data[0x2B];
                 let portf = self.mem.data[0x31];
                 let ddrd = self.mem.data[0x2A];
-                
+
                 // SPI bus is shared: both FX flash and display receive
                 // every byte simultaneously, just like real hardware.
                 // Each chip only acts on bytes when its own CS is LOW.
-                
+
                 // FX Flash CS = PD1 (Arduino D2, active LOW)
                 let fx_cs_active = self.fx_flash.loaded
                     && (ddrd & (1 << 1) != 0)   // PD1 configured as output
-                    && (portd & (1 << 1) == 0);  // PD1 driven LOW
-                
+                    && (portd & (1 << 1) == 0); // PD1 driven LOW
+
                 // FX flash: transfer byte and capture MISO response
                 if fx_cs_active {
                     let response = self.fx_flash.transfer(value);
@@ -1201,23 +1353,37 @@ impl Arduboy {
                     self.dbg_fx_transfers += 1;
                     self.dbg_fx_bytes_in_cs += 1;
                     if self.debug && self.dbg_fx_transfers <= 20 {
-                        eprintln!("[FX-xfer] #{} MOSI=0x{:02X} MISO=0x{:02X} state={:?} PC=0x{:04X}",
-                            self.dbg_fx_transfers, value, response, self.fx_flash.state, self.cpu.pc);
+                        eprintln!(
+                            "[FX-xfer] #{} MOSI=0x{:02X} MISO=0x{:02X} state={:?} PC=0x{:04X}",
+                            self.dbg_fx_transfers,
+                            value,
+                            response,
+                            self.fx_flash.state,
+                            self.cpu.pc
+                        );
                     }
                 } else {
                     self.spdr_in = 0xFF;
                 }
-                
+
                 // Display: always push to display SPI buffer.
                 // flush_spi() checks the display's own CS (PD6 for SSD1306,
                 // PF6 for PCD8544) and discards bytes when CS is HIGH.
-                if self.debug && (self.dbg_spdr_writes < 30 || (self.dbg_spdr_writes >= 85 && self.dbg_spdr_writes < 100)
-                    || (self.dbg_spdr_writes >= 1024 && self.dbg_spdr_writes < 1040)) {
-                    eprintln!("  SPI#{:3} val=0x{:02X} PD4={} PD6={} PF5={} PF6={} FX_CS={}",
-                        self.dbg_spdr_writes, value, 
-                        (portd >> 4) & 1, (portd >> 6) & 1,
-                        (portf >> 5) & 1, (portf >> 6) & 1,
-                        if fx_cs_active { "LO" } else { "HI" });
+                if self.debug
+                    && (self.dbg_spdr_writes < 30
+                        || (self.dbg_spdr_writes >= 85 && self.dbg_spdr_writes < 100)
+                        || (self.dbg_spdr_writes >= 1024 && self.dbg_spdr_writes < 1040))
+                {
+                    eprintln!(
+                        "  SPI#{:3} val=0x{:02X} PD4={} PD6={} PF5={} PF6={} FX_CS={}",
+                        self.dbg_spdr_writes,
+                        value,
+                        (portd >> 4) & 1,
+                        (portd >> 6) & 1,
+                        (portf >> 5) & 1,
+                        (portf >> 6) & 1,
+                        if fx_cs_active { "LO" } else { "HI" }
+                    );
                 }
                 let portc = self.mem.data[0x28];
                 if self.spi_trace_enabled && self.spi_trace.len() < 200 {
@@ -1237,7 +1403,9 @@ impl Arduboy {
         // PLL write
         if addr == 0x49 {
             self.pll.write(value);
-            if a < self.mem.data.len() { self.mem.data[a] = value; }
+            if a < self.mem.data.len() {
+                self.mem.data[a] = value;
+            }
             return;
         }
 
@@ -1251,13 +1419,17 @@ impl Arduboy {
                     self.eeprom_dirty = true;
                 }
             }
-            if a < self.mem.data.len() { self.mem.data[a] = value & !2; }
+            if a < self.mem.data.len() {
+                self.mem.data[a] = value & !2;
+            }
             return;
         }
 
         // ADC writes
         if self.adc.write(addr, value, &mut self.rng_state) {
-            if a < self.mem.data.len() { self.mem.data[a] = value; }
+            if a < self.mem.data.len() {
+                self.mem.data[a] = value;
+            }
             return;
         }
 
@@ -1401,18 +1573,17 @@ impl Arduboy {
                     let is_d = portc & (1 << self.pcd_dc_bit) != 0;
                     let cs_h = portc & (1 << self.pcd_cs_bit) != 0;
                     if self.debug && self.pcd8544.dbg_cmd_count + self.pcd8544.dbg_data_count < 10 {
-                        eprintln!("[PCD] val=0x{:02X} PORTC=0x{:02X} dc={} cs_hi={}", byte, portc, is_d, cs_h);
+                        eprintln!(
+                            "[PCD] val=0x{:02X} PORTC=0x{:02X} dc={} cs_hi={}",
+                            byte, portc, is_d, cs_h
+                        );
                     }
                     (is_d, cs_h)
                 }
             } else {
                 match self.display_type {
-                    DisplayType::Ssd1306 => {
-                        (portd & (1 << 4) != 0, portd & (1 << 6) != 0)
-                    }
-                    DisplayType::Pcd8544 => {
-                        (portf & (1 << 5) != 0, portf & (1 << 6) != 0)
-                    }
+                    DisplayType::Ssd1306 => (portd & (1 << 4) != 0, portd & (1 << 6) != 0),
+                    DisplayType::Pcd8544 => (portf & (1 << 5) != 0, portf & (1 << 6) != 0),
                     DisplayType::Unknown => {
                         let ardu_cs_active = portd & (1 << 6) == 0;
                         let ardu_dc_cmd = portd & (1 << 4) == 0;
@@ -1420,8 +1591,10 @@ impl Arduboy {
                         let gb_dc_cmd = portf & (1 << 5) == 0;
 
                         if self.debug && self.dbg_spdr_writes < 30 {
-                            eprintln!("  DETECT: val=0x{:02X} ardu(cs={} dc_cmd={}) gb(cs={} dc_cmd={})",
-                                byte, ardu_cs_active, ardu_dc_cmd, gb_cs_active, gb_dc_cmd);
+                            eprintln!(
+                                "  DETECT: val=0x{:02X} ardu(cs={} dc_cmd={}) gb(cs={} dc_cmd={})",
+                                byte, ardu_cs_active, ardu_dc_cmd, gb_cs_active, gb_dc_cmd
+                            );
                         }
 
                         if ardu_cs_active && ardu_dc_cmd {
@@ -1452,15 +1625,23 @@ impl Arduboy {
             // Skip SPI bytes when display CS is HIGH (not selected)
             if cs_high {
                 if self.spi_trace_enabled && self.spi_trace.len() < 200 {
-                    self.spi_trace.push(format!("SKIP val=0x{:02X} PORTC=0x{:02X} cs_high=true", byte, portc));
+                    self.spi_trace.push(format!(
+                        "SKIP val=0x{:02X} PORTC=0x{:02X} cs_high=true",
+                        byte, portc
+                    ));
                 }
                 continue;
             }
 
             if self.spi_trace_enabled && self.spi_trace.len() < 200 {
-                self.spi_trace.push(format!("{} val=0x{:02X} PORTC=0x{:02X} dc_bit={} cs_bit={}",
-                    if is_data { "DATA" } else { "CMD " }, byte, portc,
-                    self.pcd_dc_bit, self.pcd_cs_bit));
+                self.spi_trace.push(format!(
+                    "{} val=0x{:02X} PORTC=0x{:02X} dc_bit={} cs_bit={}",
+                    if is_data { "DATA" } else { "CMD " },
+                    byte,
+                    portc,
+                    self.pcd_dc_bit,
+                    self.pcd_cs_bit
+                ));
             }
 
             match self.display_type {
@@ -1661,15 +1842,21 @@ impl Arduboy {
         // Timer3/Timer4 only on 32u4
         let t3 = if self.cpu_type == CpuType::Atmega32u4 {
             self.timer3.get_tone_hz(CLOCK_HZ)
-        } else { 0.0 };
+        } else {
+            0.0
+        };
         let t4 = if self.cpu_type == CpuType::Atmega32u4 {
             self.timer4.get_tone_hz(CLOCK_HZ)
-        } else { 0.0 };
+        } else {
+            0.0
+        };
 
         // Timer2 only on 328P (Gamebuino sound)
         let t2 = if self.cpu_type == CpuType::Atmega328p {
             self.timer2.get_tone_hz(CLOCK_HZ)
-        } else { 0.0 };
+        } else {
+            0.0
+        };
 
         // GPIO bit-bang speaker 1: derive frequency from toggle rate
         // ATmega32u4: PC6 (Arduboy), ATmega328P: PD3 (Gamebuino Classic)
@@ -1677,19 +1864,35 @@ impl Arduboy {
             let age = self.cpu.tick.saturating_sub(self.speaker_last_active);
             if age < 250_000 {
                 CLOCK_HZ as f32 / (2.0 * self.speaker_half_period as f32)
-            } else { 0.0 }
-        } else { 0.0 };
+            } else {
+                0.0
+            }
+        } else {
+            0.0
+        };
 
         // GPIO bit-bang speaker 2 (PB5): derive frequency from toggle rate
         let gpio2_hz = if self.speaker2_half_period > 0 {
             let age = self.cpu.tick.saturating_sub(self.speaker2_last_active);
             if age < 250_000 {
                 CLOCK_HZ as f32 / (2.0 * self.speaker2_half_period as f32)
-            } else { 0.0 }
-        } else { 0.0 };
+            } else {
+                0.0
+            }
+        } else {
+            0.0
+        };
 
         // Left: Timer3 > Timer4 > Timer2 > GPIO speaker 1 (PC6 on 32u4, PD3 on 328P)
-        let left = if t3 > 0.0 { t3 } else if t4 > 0.0 { t4 } else if t2 > 0.0 { t2 } else { gpio1_hz };
+        let left = if t3 > 0.0 {
+            t3
+        } else if t4 > 0.0 {
+            t4
+        } else if t2 > 0.0 {
+            t2
+        } else {
+            gpio1_hz
+        };
         // Right: Timer1 > GPIO PB5
         let right = if t1 > 0.0 { t1 } else { gpio2_hz };
 
@@ -1933,8 +2136,8 @@ mod tests {
         assert_eq!(ard.cpu_type, CpuType::Atmega328p);
         // 328P defaults to PCD8544 with Gamebuino Classic pin mapping
         assert_eq!(ard.display_type, DisplayType::Pcd8544);
-        assert_eq!(ard.pcd_cs_bit, 1);  // PC1 = A1
-        assert_eq!(ard.pcd_dc_bit, 2);  // PC2 = A2 = D16
+        assert_eq!(ard.pcd_cs_bit, 1); // PC1 = A1
+        assert_eq!(ard.pcd_dc_bit, 2); // PC2 = A2 = D16
     }
 
     #[test]
@@ -1944,8 +2147,10 @@ mod tests {
         // Fill all 43 vectors (0x00..0xA8, step 4) with JMP 0x0000
         // JMP encoding: 0x940C 0x0000 (little-endian: 0C 94 00 00)
         for addr in (0..=0xA8).step_by(4) {
-            flash[addr] = 0x0C; flash[addr + 1] = 0x94;
-            flash[addr + 2] = 0x00; flash[addr + 3] = 0x00;
+            flash[addr] = 0x0C;
+            flash[addr + 1] = 0x94;
+            flash[addr + 2] = 0x00;
+            flash[addr + 3] = 0x00;
         }
         assert_eq!(detect_cpu_type(&flash), CpuType::Atmega32u4);
     }
@@ -1955,12 +2160,15 @@ mod tests {
         // Simulate ATmega328P: JMP for vectors 0..25 (0x00..0x64), then code
         let mut flash = vec![0u8; 32768];
         for addr in (0..=0x64).step_by(4) {
-            flash[addr] = 0x0C; flash[addr + 1] = 0x94;
-            flash[addr + 2] = 0x00; flash[addr + 3] = 0x00;
+            flash[addr] = 0x0C;
+            flash[addr + 1] = 0x94;
+            flash[addr + 2] = 0x00;
+            flash[addr + 3] = 0x00;
         }
         // 0x68+ is regular code (not JMP/RJMP) — e.g. LDI, MOV, etc.
         for addr in (0x68..0xB0).step_by(2) {
-            flash[addr] = 0x0F; flash[addr + 1] = 0xEF; // LDI r16, 0xFF
+            flash[addr] = 0x0F;
+            flash[addr + 1] = 0xEF; // LDI r16, 0xFF
         }
         assert_eq!(detect_cpu_type(&flash), CpuType::Atmega328p);
     }
@@ -1989,7 +2197,7 @@ mod tests {
     #[test]
     fn test_load_hex() {
         let mut ard = Arduboy::new();
-        let hex = ":100000000C9434000C944E000C944E000C944E00A4\n:00000001FF\n";
+        let hex = ":100000000C9434000C944E000C944E000C944E0052\n:00000001FF\n";
         let result = ard.load_hex(hex);
         assert!(result.is_ok());
         assert_eq!(ard.mem.flash[0], 0x0C);
@@ -2032,10 +2240,14 @@ mod tests {
         }
 
         // Check initial state
-        println!("[DIAG] display_type={:?} pcd_cs_bit={} pcd_dc_bit={}",
-            ard.display_type, ard.pcd_cs_bit, ard.pcd_dc_bit);
-        println!("[DIAG] Reset vector: flash[0..4] = {:02X} {:02X} {:02X} {:02X}",
-            ard.mem.flash[0], ard.mem.flash[1], ard.mem.flash[2], ard.mem.flash[3]);
+        println!(
+            "[DIAG] display_type={:?} pcd_cs_bit={} pcd_dc_bit={}",
+            ard.display_type, ard.pcd_cs_bit, ard.pcd_dc_bit
+        );
+        println!(
+            "[DIAG] Reset vector: flash[0..4] = {:02X} {:02X} {:02X} {:02X}",
+            ard.mem.flash[0], ard.mem.flash[1], ard.mem.flash[2], ard.mem.flash[3]
+        );
 
         // Enable SPI byte trace
         ard.spi_trace_enabled = true;
@@ -2050,36 +2262,67 @@ mod tests {
             let portc = ard.mem.data[0x28];
             let spcr = ard.mem.data[0x4C];
 
-            println!("[DIAG] Frame {}: pc=0x{:04X} SPI_this_frame={} SPI_total={} \
+            println!(
+                "[DIAG] Frame {}: pc=0x{:04X} SPI_this_frame={} SPI_total={} \
                      DDRC=0x{:02X} PORTC=0x{:02X} SPCR=0x{:02X} sleeping={}",
-                frame, ard.cpu.pc, spi_count, ard.dbg_spdr_writes,
-                ddrc, portc, spcr, ard.cpu.sleeping);
-            println!("[DIAG]   pcd_cmd={} pcd_data={} display_mode={} display_type={:?}",
-                ard.pcd8544.dbg_cmd_count, ard.pcd8544.dbg_data_count,
-                ard.pcd8544.display_mode, ard.display_type);
-            println!("[DIAG]   vram[0..8]={:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X}",
-                ard.pcd8544.vram[0], ard.pcd8544.vram[1], ard.pcd8544.vram[2], ard.pcd8544.vram[3],
-                ard.pcd8544.vram[4], ard.pcd8544.vram[5], ard.pcd8544.vram[6], ard.pcd8544.vram[7]);
+                frame,
+                ard.cpu.pc,
+                spi_count,
+                ard.dbg_spdr_writes,
+                ddrc,
+                portc,
+                spcr,
+                ard.cpu.sleeping
+            );
+            println!(
+                "[DIAG]   pcd_cmd={} pcd_data={} display_mode={} display_type={:?}",
+                ard.pcd8544.dbg_cmd_count,
+                ard.pcd8544.dbg_data_count,
+                ard.pcd8544.display_mode,
+                ard.display_type
+            );
+            println!(
+                "[DIAG]   vram[0..8]={:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X}",
+                ard.pcd8544.vram[0],
+                ard.pcd8544.vram[1],
+                ard.pcd8544.vram[2],
+                ard.pcd8544.vram[3],
+                ard.pcd8544.vram[4],
+                ard.pcd8544.vram[5],
+                ard.pcd8544.vram[6],
+                ard.pcd8544.vram[7]
+            );
 
             // Check PORTC bit states for DC/CS pins
             let dc_val = (portc >> ard.pcd_dc_bit) & 1;
             let cs_val = (portc >> ard.pcd_cs_bit) & 1;
-            println!("[DIAG]   DC(PC{})={} CS(PC{})={}",
-                ard.pcd_dc_bit, dc_val, ard.pcd_cs_bit, cs_val);
+            println!(
+                "[DIAG]   DC(PC{})={} CS(PC{})={}",
+                ard.pcd_dc_bit, dc_val, ard.pcd_cs_bit, cs_val
+            );
         }
 
         // Final state summary
         let vram_nonzero = ard.pcd8544.vram.iter().filter(|&&b| b != 0).count();
-        let fb_nonzero = ard.pcd8544.framebuffer.chunks(4)
+        let fb_nonzero = ard
+            .pcd8544
+            .framebuffer
+            .chunks(4)
             .filter(|px| px[0] != 0 || px[1] != 0 || px[2] != 0)
             .count();
         println!("\n[DIAG] === SUMMARY ===");
         println!("[DIAG] Total SPI writes: {}", ard.dbg_spdr_writes);
         println!("[DIAG] PCD8544 commands: {}", ard.pcd8544.dbg_cmd_count);
         println!("[DIAG] PCD8544 data bytes: {}", ard.pcd8544.dbg_data_count);
-        println!("[DIAG] PCD8544 display_mode: {} (0=blank, 4=normal, 5=inverse)",
-            ard.pcd8544.display_mode);
-        println!("[DIAG] VRAM non-zero bytes: {} / {}", vram_nonzero, ard.pcd8544.vram.len());
+        println!(
+            "[DIAG] PCD8544 display_mode: {} (0=blank, 4=normal, 5=inverse)",
+            ard.pcd8544.display_mode
+        );
+        println!(
+            "[DIAG] VRAM non-zero bytes: {} / {}",
+            vram_nonzero,
+            ard.pcd8544.vram.len()
+        );
         println!("[DIAG] Framebuffer lit pixels: {}", fb_nonzero);
         println!("[DIAG] display_type: {:?}", ard.display_type);
 
@@ -2088,9 +2331,14 @@ mod tests {
             // Dump current PC vicinity
             let pc = ard.cpu.pc as usize * 2;
             if pc + 3 < ard.mem.flash.len() {
-                println!("[DIAG] PC vicinity: flash[0x{:04X}] = {:02X} {:02X} {:02X} {:02X}",
-                    pc, ard.mem.flash[pc], ard.mem.flash[pc+1],
-                    ard.mem.flash[pc+2], ard.mem.flash[pc+3]);
+                println!(
+                    "[DIAG] PC vicinity: flash[0x{:04X}] = {:02X} {:02X} {:02X} {:02X}",
+                    pc,
+                    ard.mem.flash[pc],
+                    ard.mem.flash[pc + 1],
+                    ard.mem.flash[pc + 2],
+                    ard.mem.flash[pc + 3]
+                );
             }
         }
         if ard.pcd8544.dbg_cmd_count == 0 && ard.dbg_spdr_writes > 0 {
@@ -2101,30 +2349,68 @@ mod tests {
             println!("[DIAG] *** Commands received but no data - display_mode or cursor issue ***");
         }
         if vram_nonzero > 0 && fb_nonzero == 0 {
-            println!("[DIAG] *** VRAM has data but framebuffer empty - render_to_framebuffer issue ***");
+            println!(
+                "[DIAG] *** VRAM has data but framebuffer empty - render_to_framebuffer issue ***"
+            );
         }
 
         // Dump SPI trace
-        let portc_writes = ard.spi_trace.iter().filter(|s| s.contains("PORTC_WRITE")).count();
-        let ddrc_writes = ard.spi_trace.iter().filter(|s| s.contains("DDRC_WRITE")).count();
-        let spdr_writes_in_trace = ard.spi_trace.iter().filter(|s| s.starts_with("SPDR")).count();
-        let skip_count = ard.spi_trace.iter().filter(|s| s.starts_with("SKIP")).count();
-        let cmd_count = ard.spi_trace.iter().filter(|s| s.starts_with("CMD")).count();
-        let data_count = ard.spi_trace.iter().filter(|s| s.starts_with("DATA")).count();
+        let portc_writes = ard
+            .spi_trace
+            .iter()
+            .filter(|s| s.contains("PORTC_WRITE"))
+            .count();
+        let ddrc_writes = ard
+            .spi_trace
+            .iter()
+            .filter(|s| s.contains("DDRC_WRITE"))
+            .count();
+        let spdr_writes_in_trace = ard
+            .spi_trace
+            .iter()
+            .filter(|s| s.starts_with("SPDR"))
+            .count();
+        let skip_count = ard
+            .spi_trace
+            .iter()
+            .filter(|s| s.starts_with("SKIP"))
+            .count();
+        let cmd_count = ard
+            .spi_trace
+            .iter()
+            .filter(|s| s.starts_with("CMD"))
+            .count();
+        let data_count = ard
+            .spi_trace
+            .iter()
+            .filter(|s| s.starts_with("DATA"))
+            .count();
 
         println!("\n[DIAG] === TRACE SUMMARY (v2) ===");
-        println!("[DIAG] trace_entries={} PORTC_WRITE={} DDRC_WRITE={} SPDR={} SKIP={} CMD={} DATA={}",
-            ard.spi_trace.len(), portc_writes, ddrc_writes, spdr_writes_in_trace,
-            skip_count, cmd_count, data_count);
+        println!(
+            "[DIAG] trace_entries={} PORTC_WRITE={} DDRC_WRITE={} SPDR={} SKIP={} CMD={} DATA={}",
+            ard.spi_trace.len(),
+            portc_writes,
+            ddrc_writes,
+            spdr_writes_in_trace,
+            skip_count,
+            cmd_count,
+            data_count
+        );
 
         if portc_writes == 0 {
             println!("[DIAG] *** ZERO PORTC writes detected! ***");
-            println!("[DIAG] *** The game's digitalWrite to PORTC is NOT reaching write_data(0x28)! ***");
+            println!(
+                "[DIAG] *** The game's digitalWrite to PORTC is NOT reaching write_data(0x28)! ***"
+            );
             println!("[DIAG] *** Possible cause: ST X / LD X instructions with wrong X value ***");
         }
 
-        println!("\n[DIAG] === SPI BYTE TRACE (first {} of {} entries) ===",
-            ard.spi_trace.len().min(200), ard.spi_trace.len());
+        println!(
+            "\n[DIAG] === SPI BYTE TRACE (first {} of {} entries) ===",
+            ard.spi_trace.len().min(200),
+            ard.spi_trace.len()
+        );
         for (i, entry) in ard.spi_trace.iter().take(200).enumerate() {
             println!("[TRACE {:3}] {}", i, entry);
         }

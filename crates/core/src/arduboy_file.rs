@@ -132,19 +132,27 @@ fn read_zip(data: &[u8]) -> Result<HashMap<String, Vec<u8>>, String> {
 
     // Find End of Central Directory record (scan backwards)
     let eocd_sig: [u8; 4] = [0x50, 0x4B, 0x05, 0x06];
-    let eocd_pos = data.windows(4).rposition(|w| w == eocd_sig)
+    let eocd_pos = data
+        .windows(4)
+        .rposition(|w| w == eocd_sig)
         .ok_or("No End of Central Directory found — not a valid ZIP")?;
 
-    if eocd_pos + 22 > data.len() { return Err("EOCD truncated".into()); }
+    if eocd_pos + 22 > data.len() {
+        return Err("EOCD truncated".into());
+    }
     let cd_count = u16_le(data, eocd_pos + 10) as usize;
     let cd_offset = u32_le(data, eocd_pos + 16) as usize;
 
     // Walk Central Directory entries to get reliable sizes + local header offsets
     let mut cd_pos = cd_offset;
     for _ in 0..cd_count {
-        if cd_pos + 46 > data.len() { break; }
+        if cd_pos + 46 > data.len() {
+            break;
+        }
         let sig = u32_le(data, cd_pos);
-        if sig != 0x02014b50 { break; }
+        if sig != 0x02014b50 {
+            break;
+        }
 
         let method = u16_le(data, cd_pos + 10);
         let comp_size = u32_le(data, cd_pos + 20) as usize;
@@ -155,30 +163,39 @@ fn read_zip(data: &[u8]) -> Result<HashMap<String, Vec<u8>>, String> {
         let local_offset = u32_le(data, cd_pos + 42) as usize;
 
         let cd_name_start = cd_pos + 46;
-        if cd_name_start + name_len > data.len() { break; }
-        let name = String::from_utf8_lossy(&data[cd_name_start..cd_name_start + name_len]).into_owned();
+        if cd_name_start + name_len > data.len() {
+            break;
+        }
+        let name =
+            String::from_utf8_lossy(&data[cd_name_start..cd_name_start + name_len]).into_owned();
 
         cd_pos = cd_name_start + name_len + extra_len_cd + comment_len;
 
         // Skip directories
-        if name.ends_with('/') || (comp_size == 0 && _uncomp_size == 0) { continue; }
+        if name.ends_with('/') || (comp_size == 0 && _uncomp_size == 0) {
+            continue;
+        }
 
         // Read data from local file header position
-        if local_offset + 30 > data.len() { continue; }
+        if local_offset + 30 > data.len() {
+            continue;
+        }
         let local_sig = u32_le(data, local_offset);
-        if local_sig != 0x04034b50 { continue; }
+        if local_sig != 0x04034b50 {
+            continue;
+        }
         let local_name_len = u16_le(data, local_offset + 26) as usize;
         let local_extra_len = u16_le(data, local_offset + 28) as usize;
         let data_start = local_offset + 30 + local_name_len + local_extra_len;
-        if data_start + comp_size > data.len() { continue; }
+        if data_start + comp_size > data.len() {
+            continue;
+        }
         let compressed = &data[data_start..data_start + comp_size];
 
         let file_data = match method {
             0 => compressed.to_vec(),
-            8 => {
-                miniz_oxide::inflate::decompress_to_vec(compressed)
-                    .map_err(|e| format!("Inflate error for {}: {:?}", name, e))?
-            }
+            8 => miniz_oxide::inflate::decompress_to_vec(compressed)
+                .map_err(|e| format!("Inflate error for {}: {:?}", name, e))?,
             _ => continue,
         };
 
@@ -200,7 +217,8 @@ fn u16_le(data: &[u8], pos: usize) -> u16 {
     (data[pos] as u16) | ((data[pos + 1] as u16) << 8)
 }
 fn u32_le(data: &[u8], pos: usize) -> u32 {
-    (data[pos] as u32) | ((data[pos + 1] as u32) << 8)
-    | ((data[pos + 2] as u32) << 16) | ((data[pos + 3] as u32) << 24)
+    (data[pos] as u32)
+        | ((data[pos + 1] as u32) << 8)
+        | ((data[pos + 2] as u32) << 16)
+        | ((data[pos + 3] as u32) << 24)
 }
-

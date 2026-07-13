@@ -5,7 +5,7 @@
 //! vertical addressing modes, column/page address windowing, and the
 //! display-on/off command set used by the Arduboy2 library.
 
-use crate::{SCREEN_WIDTH, SCREEN_HEIGHT};
+use crate::{SCREEN_HEIGHT, SCREEN_WIDTH};
 
 const FB_SIZE: usize = SCREEN_WIDTH * SCREEN_HEIGHT * 4; // RGBA
 
@@ -181,10 +181,10 @@ impl Ssd1306 {
                 if y < SCREEN_HEIGHT {
                     let offset = (y * SCREEN_WIDTH + x) * 4;
                     if pixel_on {
-                        self.framebuffer[offset] = bright;     // R
+                        self.framebuffer[offset] = bright; // R
                         self.framebuffer[offset + 1] = bright; // G
                         self.framebuffer[offset + 2] = bright; // B
-                        self.framebuffer[offset + 3] = 0xFF;   // A
+                        self.framebuffer[offset + 3] = 0xFF; // A
                     } else {
                         self.framebuffer[offset] = 0;
                         self.framebuffer[offset + 1] = 0;
@@ -229,10 +229,14 @@ impl Ssd1306 {
     pub fn save_state(&self) -> crate::savestate::Ssd1306State {
         crate::savestate::Ssd1306State {
             framebuffer: self.framebuffer.to_vec(),
-            col: self.col, page: self.page,
-            col_start: self.col_start, col_end: self.col_end,
-            page_start: self.page_start, page_end: self.page_end,
-            inverted: self.inverted, display_on: self.display_on,
+            col: self.col,
+            page: self.page,
+            col_start: self.col_start,
+            col_end: self.col_end,
+            page_start: self.page_start,
+            page_end: self.page_end,
+            inverted: self.inverted,
+            display_on: self.display_on,
             contrast: self.contrast,
         }
     }
@@ -241,10 +245,14 @@ impl Ssd1306 {
     pub fn load_state(&mut self, s: &crate::savestate::Ssd1306State) {
         let len = s.framebuffer.len().min(self.framebuffer.len());
         self.framebuffer[..len].copy_from_slice(&s.framebuffer[..len]);
-        self.col = s.col; self.page = s.page;
-        self.col_start = s.col_start; self.col_end = s.col_end;
-        self.page_start = s.page_start; self.page_end = s.page_end;
-        self.inverted = s.inverted; self.display_on = s.display_on;
+        self.col = s.col;
+        self.page = s.page;
+        self.col_start = s.col_start;
+        self.col_end = s.col_end;
+        self.page_start = s.page_start;
+        self.page_end = s.page_end;
+        self.inverted = s.inverted;
+        self.display_on = s.display_on;
         self.contrast = s.contrast;
         self.cmd_state = CmdState::Ready;
         self.cmd_skip = 0;
@@ -268,8 +276,8 @@ mod tests {
     fn test_set_column_address() {
         let mut display = Ssd1306::new();
         display.receive_command(0x21); // Set column address
-        display.receive_command(10);   // Start column
-        display.receive_command(50);   // End column
+        display.receive_command(10); // Start column
+        display.receive_command(50); // End column
         assert_eq!(display.col_start, 10);
         assert_eq!(display.col_end, 50);
         assert_eq!(display.col, 10);
@@ -293,7 +301,11 @@ mod tests {
         // Check first 8 pixels in column 0
         for bit in 0..8 {
             let offset = (bit * SCREEN_WIDTH) * 4;
-            assert_eq!(display.framebuffer[offset], 0xFF, "pixel ({}, {}) should be on", 0, bit);
+            assert_eq!(
+                display.framebuffer[offset], display.contrast,
+                "pixel ({}, {}) should be on",
+                0, bit
+            );
         }
     }
 }
