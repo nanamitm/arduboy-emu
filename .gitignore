@@ -4,7 +4,11 @@
 
 # CMake build output (Qt frontend)
 /frontend-qt/build/
+/frontend-qt/.qtcreator/
+/frontend-qt-mobile/build/
+/frontend-qt-mobile/.qtcreator/
 /build-qt-msvc/
+/build-qt-mobile-msvc/
 
 # Cargo.lock is included for binary crates
 # Cargo.lock

@@ -40,6 +40,7 @@ Choose the client that best fits how you want to run games. Both use the same
 | Client | Best for | Highlights |
 |--------|----------|------------|
 | [Web client](web/README.md) | Playing in a browser | WebAssembly, drag-and-drop ROM loading, touch controls, Gamepad API, ArduboyCollection online catalog, local save data, screenshots/GIF recording, and five switchable device skins |
+| [Qt Quick mobile client](frontend-qt-mobile/README.md) | Android APK/AAB foundation | Shared Rust core, touch-first QML display, local ROM picker, and Android ABI-aware Rust FFI build |
 | [Qt6 client](frontend-qt/README.md) | Native desktop use | Qt Widgets UI, native audio, menu-driven controls, save states, screenshots/GIF recording, five persistent device skins, and clickable on-screen controls |
 | `frontend-minifb` | Lightweight desktop/debugging | Native Rust frontend with gamepad support, debugger tools, LCD effects, profiler, and command-line options |
 

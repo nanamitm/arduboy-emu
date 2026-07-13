@@ -466,6 +466,13 @@ function wireTouch() {
 
 // ── Wiring ────────────────────────────────────────────────────────────────
 async function main() {
+  if ('serviceWorker' in navigator) {
+    // Keep the emulator, its WASM module, and the locally generated catalog
+    // available when the installed app is launched without a connection.
+    navigator.serviceWorker.register('./service-worker.js').catch((err) => {
+      console.warn('Service worker registration failed:', err);
+    });
+  }
   await init();
   emu = new AbEmu();
   window.__abemu = emu; // debugging / testing

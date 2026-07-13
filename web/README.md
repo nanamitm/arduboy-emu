@@ -32,6 +32,9 @@ Pages, Netlify, any static host).
   search by title/author, filter by category, and load supported ROMs directly.
   The catalog JSON is generated weekly; ROMs and screenshots continue to be
   fetched from the upstream project, with its game-specific license metadata.
+- **Installable PWA**: install from a supporting browser to launch the emulator
+  as a standalone app. The emulator shell and catalog are cached for offline
+  launch; individual upstream ROM downloads still require a connection.
 - Stereo audio via a single-threaded AudioWorklet (no SharedArrayBuffer, so no
   cross-origin isolation needed) with **volume** slider and **mute**
 - **Save states** (quick slot per ROM) and **EEPROM** auto-persistence, both
