@@ -98,13 +98,20 @@ fn main() {
     if profile {
         ard.profiler.start(ard.cpu.tick);
     }
+    // Track the peak number of lit pixels across every frame, so a ROM that
+    // draws and then clears each frame is not mistaken for one that never draws.
+    let mut peak_lit = 0usize;
     for _ in 0..frames {
         ard.run_frame();
+        let fb = ard.framebuffer_u32();
+        let lit = fb.iter().filter(|&&p| p != blank[0]).count();
+        peak_lit = peak_lit.max(lit);
     }
     if profile {
         ard.profiler.stop(ard.cpu.tick);
         println!("{}", ard.profiler_report());
     }
+    println!("  peak_lit_pixels over {frames} frames: {peak_lit}");
     snapshot(&ard, &blank, "no input");
 
     // Tap through the common "press to start" buttons and keep running.

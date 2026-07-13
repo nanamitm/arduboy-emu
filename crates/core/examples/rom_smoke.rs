@@ -87,13 +87,17 @@ fn main() {
             };
             let mut ard = Arduboy::new_with_cpu(cpu);
             ard.load_hex(&hex)?;
+            // "Rendered" means the display differed from a freshly reset device
+            // at any point — catching ROMs that draw a splash then clear it (a
+            // uniform full-screen fill also counts). Stop early once seen.
+            let mut rendered = false;
             for _ in 0..frames {
                 ard.run_frame();
+                if ard.framebuffer_u32() != *blank {
+                    rendered = true;
+                    break;
+                }
             }
-            let fb = ard.framebuffer_u32();
-            // "Rendered" means the display differs from a freshly reset device,
-            // so a uniform full-screen fill still counts as drawn.
-            let rendered = fb != *blank;
             Ok::<(u64, bool, CpuType), String>((ard.unknown_ops, rendered, cpu))
         }));
 
