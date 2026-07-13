@@ -32,6 +32,40 @@ Emulates the ATmega32u4 (Arduboy) and ATmega328P (Gamebuino Classic) microcontro
 - **Hot reload** — Reload current game file without restart (R key)
 - **Game browser** — N/P keys to cycle through games in directory, O to list
 
+## Client applications
+
+Choose the client that best fits how you want to run games. Both use the same
+`arduboy-core` emulation logic and support `.hex`, `.arduboy`, and `.elf` ROMs.
+
+| Client | Best for | Highlights |
+|--------|----------|------------|
+| [Web client](web/README.md) | Playing in a browser | WebAssembly, drag-and-drop ROM loading, touch controls, Gamepad API, local save data, screenshots/GIF recording, and five switchable device skins |
+| [Qt6 client](frontend-qt/README.md) | Native desktop use | Qt Widgets UI, native audio, menu-driven controls, save states, screenshots/GIF recording, five persistent device skins, and clickable on-screen controls |
+| `frontend-minifb` | Lightweight desktop/debugging | Native Rust frontend with gamepad support, debugger tools, LCD effects, profiler, and command-line options |
+
+### Web client
+
+The web client is available at [arduboy-web.pages.dev](https://arduboy-web.pages.dev/).
+To run the checked-out version locally, serve the `web/` directory (ES modules
+cannot be loaded reliably from `file://` URLs):
+
+```bash
+python -m http.server 8080 -d web
+```
+
+Then open `http://localhost:8080`. Use **Open ROM** or drag a ROM into the page.
+Keyboard controls are arrows for the D-pad, **Z** for A, and **X** for B;
+touch controls and a connected standard gamepad are also supported.
+
+### Qt6 client
+
+The native Qt6 client lives in [`frontend-qt`](frontend-qt/). It provides the
+same emulator display inside selectable Arduboy, Microcard, Tama, Pip-Boy 3000,
+and Pip-Boy Mk IV skins. Select one from **View ▸ Skin**; the choice is restored
+at the next launch. Click and hold the displayed D-pad or A/B buttons to play,
+or use arrows, **Z**, and **X**. Build prerequisites and platform-specific
+instructions are in the [Qt client README](frontend-qt/README.md).
+
 ## Building
 
 ```bash
