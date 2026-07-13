@@ -1,200 +1,144 @@
 # Roadmap
 
-ProjectABE (JavaScript, Web) との機能差分と、バージョンアップ計画。
+`arduboy-emu` と `ProjectABE` の実装をソースコードで比較した結果と、今後の計画。
+この文書の比較基準日は 2026-07-13。`arduboy-emu` は v0.8.1、ProjectABE は
+v0.6.8（コミット `f46014b`）を対象にしている。機能の有無は公開サイトの挙動ではなく、
+両リポジトリに存在する実装を基準とする。
 
 ## ProjectABE との機能比較
 
-### CPU / コア
+### CPU / デバッグ基盤
 
-| 機能 | ProjectABE | arduboy-emu 0.6.0 | 差分 |
+| 機能 | ProjectABE | arduboy-emu v0.8.1 | 差分・補足 |
 |------|:---:|:---:|------|
-| AVR 命令セット | ~100 命令 | 80+ 命令 | ほぼ同等 |
-| ELPM (24-bit flash) | ✗ | ✓ | arduboy-emu が上回る |
-| JIT コンパイル (命令→JS) | ✓ | ✗ | ProjectABE は JIT で高速化 |
-| ブレークポイント | ✓ | ✓ | **v0.2.0 で追加** |
-| ステップ実行 | ✓ | ✓ | **v0.2.0 で追加** |
-| レジスタ/RAM ウォッチ | ✓ | ✓ (RAM hex + diff + ウォッチポイント) | **v0.6.0 で強化** |
-| 逆アセンブラ | ✓ | ✓ | **v0.2.0 で追加** |
-| ソースマップ連携 | ✓ | ✗ | コンパイラ連携なし |
-| ATmega328P 対応 | ✓ | ✓ (v0.5.0) | — |
-| Web Worker 分離 | ✓ | ✗ | シングルスレッド |
-| 実行プロファイラ | ✗ | ✓ (PC ヒストグラム + コールグラフ) | **v0.6.0 で追加** |
-| GDB サーバ | ✗ | ✓ (avr-gdb RSP) | **v0.6.0 で追加** |
-| I/O レジスタ名前解決 | ✓ | ✓ (32u4 + 328P) | **v0.6.0 で追加** |
+| AVR 命令実行 | ✓（JS 命令デコーダ） | ✓（80+ 命令デコーダ） | 命令網羅性・実機互換性は継続検証が必要 |
+| ELPM / 24-bit flash | ✗ | ✓ | arduboy-emu が上回る |
+| JIT コンパイル | ✓ | ✗ | ProjectABE は命令列を JS にコンパイル |
+| 実行用 Web Worker | ✓ | ✗ | ProjectABE は `Atcore.worker.js`、Web 版はメインスレッド実行 |
+| ブレークポイント / ステップ実行 | ✓ | ✓ | 両者対応 |
+| RAM read/write ウォッチポイント | ✓ | ✓ | arduboy-emu は値マッチも対応 |
+| 逆アセンブラ | ✓ | ✓ | 両者対応 |
+| ソース位置との対応 | ✓（コンパイラ生成 srcmap） | ✓（ELF/DWARF） | arduboy-emu は外部IDEを内蔵しない |
+| ATmega328P / Gamebuino Classic | ✓ | ✓ | arduboy-emu は PCD8544 も実装 |
+| 実行プロファイラ | ✗ | ✓ | PC ヒストグラム、ホットスポット、コールグラフ、CPI |
+| GDB Remote Serial Protocol | ✗ | ✓ | `--gdb <port>` |
+| I/O レジスタ名表示 | ✓ | ✓ | 32u4 / 328P を対象 |
 
-### ディスプレイ
+### 表示・音声・ペリフェラル
 
-| 機能 | ProjectABE | arduboy-emu 0.4.0 | 差分 |
+| 機能 | ProjectABE | arduboy-emu v0.8.1 | 差分・補足 |
 |------|:---:|:---:|------|
-| SSD1306 (128×64) | ✓ | ✓ | 同等 |
-| PCD8544 / Gamebuino | ✗ | ✓ | arduboy-emu が上回る |
-| ディスプレイ反転 (INVERT) | ✓ | ✓ | **v0.2.0 で追加** |
-| コントラスト制御 | ✓ | ✓ | **v0.2.0 で追加** |
-| スケール切替 (1×–6×) | ✓ (2 段階) | ✓ (6 段階) | **v0.2.0 で追加** |
-| フルスクリーン | ✓ | ✓ | **v0.2.0 で追加** |
+| SSD1306 OLED (128×64) | ✓ | ✓ | 両者対応 |
+| PCD8544 / Gamebuino LCD | ✗ | ✓ | arduboy-emu が上回る |
+| Invert / Contrast | ✓ | ✓ | 両者対応 |
+| LCD 風エフェクト（残像・グリッド等） | ✓（スキン側表現） | ✓ | arduboy-emu は L キーで切替 |
+| Timer1 / Timer3 CTC 音声 | ✓ | ✓ | 両者対応 |
+| Timer4 高速 PWM 音声 | ✓ | ✓ | 旧ロードマップの ProjectABE「未対応」は誤り |
+| GPIO ビットバング音声 | ✓ | ✓ | arduboy-emu はエッジをサンプル精度で記録 |
+| ステレオ出力 | ✓ | ✓ | 両者対応 |
+| Timer0/1/2/3/4、SPI、ADC、PLL、EEPROM | ✓ | ✓ | 両者対応 |
+| USB Serial | ✓ | ✓ | arduboy-emu は `--serial` とコアの出力捕捉 |
+| FX Flash (W25Q128, 16 MB) | ✗ | ✓ | arduboy-emu が上回る |
+| RGB / TX / RX LED | ✓ | ✓ | 両者対応 |
+| 外部センサー (HC-SR04) | ✓ | ✗ | ProjectABE の `externalPeriferals/HCSR04.js` |
 
-### オーディオ
+### フロントエンド / 開発体験
 
-| 機能 | ProjectABE | arduboy-emu 0.4.0 | 差分 |
+| 機能 | ProjectABE | arduboy-emu v0.8.1 | 差分・補足 |
 |------|:---:|:---:|------|
-| Timer3 CTC トーン | ✓ | ✓ | 同等 |
-| Timer1 CTC トーン | ✓ | ✓ | 同等 |
-| Timer4 トーン | ✗ | ✓ | **v0.3.0 で追加** |
-| GPIO ビットバング | ✓ (pin callback) | ✓ (PC6+PB5 edge detect) | 同等 |
-| 2ch ステレオ出力 | ✓ | ✓ | **v0.2.0 で追加** |
-| サンプル精度波形バッファ | ✓ | ✓ | **v0.3.0 で追加** |
+| ブラウザ版 | ✓ | ✓ | arduboy-emu は Rust/WASM + Canvas |
+| ネイティブデスクトップ版 | ✓（Electron） | ✓（minifb / Qt6） | arduboy-emu は C++/Qt フロントエンドも提供 |
+| モバイル向け配布 | ✓（Cordova Android） | △（レスポンシブUI・タッチ操作） | arduboy-emu に APK / PWA はない |
+| キーボード・ゲームパッド | ✓ | ✓（デスクトップ） | Web Gamepad API は未実装 |
+| タッチ操作 | ✓ | ✓（Web） | 両者対応 |
+| ドラッグ＆ドロップ ROM 読込 | ✓ | ✓（Qt / Web） | minifb 版はディレクトリブラウズで代替 |
+| `.arduboy` 読込 | ✓ | ✓ | 両者対応 |
+| URL から ROM 読込 | ✓ | ✓（Web の `?rom=<url>`） | CORS は配信先に依存 |
+| GIF 録画 / PNG スクリーンショット | ✓ | ✓ | 両者対応 |
+| EEPROM 永続化 | ✓ | ✓ | ファイル / IndexedDB |
+| セーブ状態・巻き戻し | ✗ | ✓ | arduboy-emu が上回る |
+| ゲーム一覧 | ✓（外部リポジトリ） | ✓（ローカルディレクトリ） | オンラインリポジトリ統合は未実装 |
+| 本体スキン切替 | ✓（Arduboy, Microcard, Pipboy, Tama 等） | ✗ | ProjectABE が上回る |
+| IDE、ソース編集、ビルド | ✓ | ✗ | ProjectABE は Cloud / Arduino IDE ローカルコンパイラを持つ |
+| 実機書込み | ✓（AVRGirl、デスクトップ） | ✗ | ProjectABE が上回る |
+| QR コード生成 | ✓ | ✗ | ProjectABE はビルド成果物用 QR を生成 |
 
-### ペリフェラル
+### 現状の要約
 
-| 機能 | ProjectABE | arduboy-emu 0.4.0 | 差分 |
-|------|:---:|:---:|------|
-| Timer0 (8-bit) | ✓ | ✓ | 同等 |
-| Timer1 (16-bit) | ✓ | ✓ | 同等 |
-| Timer3 (16-bit) | ✓ | ✓ | 同等 |
-| Timer4 (10-bit 高速) | ✗ | ✓ | **v0.3.0 で追加** |
-| SPI | ✓ | ✓ | 同等 |
-| ADC | ✓ | ✓ | 同等 |
-| PLL | ✓ | ✓ | 同等 |
-| EEPROM | ✓ | ✓ | 同等 |
-| USB Serial エミュレーション | ✓ | ✓ | **v0.2.0 で追加** |
-| FX Flash (W25Q128) | ✗ | ✓ | arduboy-emu が上回る |
-| 外部ペリフェラル (HC-SR04 等) | ✓ | ✗ | センサーエミュなし |
-| RGB LED | ✓ | ✓ | **v0.4.0 で追加** |
+arduboy-emu はエミュレーションの対象範囲、FX Flash、PCD8544、セーブ状態／巻き戻し、
+プロファイラ、GDB、ELF/DWARF に強みがある。一方 ProjectABE は Web Worker、スキン、
+オンラインゲーム一覧、IDE／コンパイル、実機書込み、Android 配布を持つ。
 
-### UI / UX
-
-| 機能 | ProjectABE | arduboy-emu 0.4.0 | 差分 |
-|------|:---:|:---:|------|
-| Web ブラウザ動作 | ✓ | ✗ | デスクトップ専用 |
-| モバイル対応 | ✓ (Cordova) | ✗ | — |
-| Electron デスクトップ | ✓ | ✗ (ネイティブ) | ネイティブの方が軽量 |
-| ゲームパッド対応 | ✗ | ✓ | arduboy-emu が上回る |
-| スキンシステム | ✓ (7種) | ✗ | Arduboy/Microcard/Pipboy/Tama 等 |
-| ドラッグ＆ドロップ読込 | ✓ | ✗ | N/P ゲームブラウザで代替 |
-| .arduboy ファイル読込 | ✓ | ✓ | **v0.4.0 で追加** |
-| GIF 録画 | ✓ | ✓ | **v0.4.0 で追加** |
-| PNG スクリーンショット | ✓ | ✓ (任意倍率) | **v0.4.0 で追加** |
-| EEPROM 永続化 | ✓ | ✓ (自動保存) | **v0.4.0 で追加** |
-| ゲームブラウザ | ✓ (リポジトリ) | ✓ (ディレクトリ) | **v0.4.0 で追加** |
-| ゲームリポジトリブラウザ | ✓ | ✗ | eriedリポジトリ統合 |
-| クラウドコンパイラ | ✓ | ✗ | ソースコードコンパイルなし |
-| 実機書き込み (AVRGirl) | ✓ | ✗ | USB flasher なし |
-| QR コード生成 | ✓ | ✗ | — |
-| キーボード入力 | ✓ | ✓ | 同等 |
-| ミュートトグル | ✓ (M) | ✓ (M) | 同等 |
-| FPS リミッタ | ✓ | ✓ | **v0.4.0 で追加** |
-
-### まとめ (v0.7.0 時点)
-
-| カテゴリ | ProjectABE が上回る | 同等 | arduboy-emu が上回る |
-|----------|:---:|:---:|:---:|
-| CPU/コア | 3 | 6 | 4 |
-| ディスプレイ | 0 | 5 | 1 |
-| オーディオ | 0 | 4 | 2 |
-| ペリフェラル | 0 | 9 | 3 |
-| UI/UX | 7 | 3 | 8 |
-| **合計** | **10** | **27** | **18** |
-
-**v0.1.0 → v0.7.0 での改善**: ProjectABE優位 24→10 (−14)、同等 13→27 (+14)、arduboy-emu優位 4→18 (+14)
+旧版に残っていた「Web 版なし」「ゲームパッドなし」「ドラッグ＆ドロップなし」および
+「ProjectABE の Timer4 未対応」は、現行ソースと一致しないため訂正した。
 
 ---
 
 ## バージョンアップ計画
 
-### ~~v0.2.0 — デバッグ基盤とディスプレイ強化~~ ✅ 完了
+### v0.2.0 — デバッグ基盤とディスプレイ強化 ✅ 完了
 
-- [x] 逆アセンブラ (PC → 命令テキスト)
-- [x] `--break <addr>` CLI ブレークポイント
-- [x] ステップ実行 (`--step` モード)
-- [x] レジスタ/SREG/SP ダンプ表示
-- [x] SSD1306 Display Invert コマンド (0xA6/0xA7)
-- [x] SSD1306 Contrast 制御 (0x81)
-- [x] ウィンドウリサイズ / スケール切替 (1×, 2×, 3×, 4×, 5×, 6×)
-- [x] フルスクリーン (F11)
-- [x] スクリーンショット保存 (BMP, S キー)
+- [x] 逆アセンブラ、CLI ブレークポイント、ステップ実行
+- [x] レジスタ / SREG / SP 表示、SSD1306 invert / contrast
+- [x] 1×–6× スケール、フルスクリーン、スクリーンショット
 
-### ~~v0.3.0 — オーディオ改善と USB Serial~~ ✅ 完了
+### v0.3.0 — オーディオ改善と USB Serial ✅ 完了
 
-- [x] 2ch ステレオ出力 (Speaker1: PC6, Speaker2: PB5)
-- [x] サンプル精度波形バッファ (pin-change → AudioBuffer → PCM)
-- [x] USB Serial エミュレーション (UEDATX → --serial stderr出力)
-- [x] Serial Monitor 表示 (--serial フラグ)
-- [x] Timer4 (10-bit 高速 PWM) — CTC/Normal/PWM モード
+- [x] 2ch ステレオ、サンプル精度波形バッファ
+- [x] USB Serial 捕捉と `--serial`
+- [x] Timer4（10-bit 高速 PWM）
 
-### ~~v0.4.0 — GUI フロントエンド~~ ✅ 完了
+### v0.4.0 — GUI フロントエンド ✅ 完了
 
-**目標**: ファイル操作とユーザー体験を ProjectABE 並みにする
+- [x] `.arduboy` ZIP、EEPROM 永続化、GIF、PNG
+- [x] LED 状態、FPS 切替、ローカルゲームブラウザ、ホットリロード
+- [x] Qt 版での ROM ドラッグ＆ドロップ
 
-- [x] .arduboy ZIP ファイルパーサ (info.json + hex + bin)
-- [x] EEPROM 永続化 (自動保存/復元, .eep ファイル, 10秒間隔)
-- [x] GIF 録画 (G キー, LZW 圧縮, フレームキャプチャ)
-- [x] PNG スクリーンショット (S キー, 現在のスケール倍率で保存)
-- [x] RGB LED / TX LED / RX LED 状態表示 (タイトルバー)
-- [x] FPS リミッタ切替 (F キー: 60fps ↔ 無制限)
-- [x] ゲームブラウザ (N=次 / P=前 / O=一覧, ディレクトリ内ファイルスキャン)
-- [x] ホットリロード (R キー)
+### v0.5.0 — ATmega328P / Gamebuino Classic ✅ 実装完了・互換性検証継続
 
-> ※ ネイティブ D&D は minifb 未対応のため、ディレクトリスキャン方式で代替。
+- [x] `CpuType`、328P メモリマップ、割り込みベクタ、Timer2
+- [x] 328P 固有のポート制限と Gamebuino ボタンマッピング
+- [x] `--cpu 328p` と PCD8544 SPI ルーティング
+- [ ] Gamebuino Classic 実ゲーム群での回帰テストと互換性修正
 
-### v0.5.0 — ATmega328P / Gamebuino Classic 対応
+### v0.6.0 — 高度なデバッグ機能と表示改善 ✅ 完了
 
-**目標**: ATmega328P CPU をサポートし、Gamebuino Classic のゲームを実行可能にする
+- [x] RAM / I/O ビューア、read/write ウォッチポイント、値マッチ
+- [x] 実行プロファイラ、GDB RSP サーバ
+- [x] LCD エフェクト、ぼかし、整数スケーリング
 
-- [x] `CpuType` enum (`Atmega32u4` / `Atmega328p`) と構成切替
-- [x] ATmega328P メモリマップ (SRAM 2KB, `Memory::new_with_size()`)
-- [x] ATmega328P 割り込みベクタテーブル (26 本)
-- [x] Timer2 (8-bit 非同期) ペリフェラル (Timer8 再利用, 専用アドレス・ベクタ)
-- [x] ポート制限 (PORTB/C/D のみ, Timer3/Timer4/USB は 32u4 限定)
-- [x] Gamebuino Classic ボタンマッピング (UP=PB1, DOWN=PD6, LEFT=PB0, RIGHT=PD7, A=PD4, B=PD2)
-- [x] `--cpu 328p` CLI オプション
-- [x] PCD8544 SPI ルーティング (CS=PC2, DC=PC3)
+### v0.7.0 — コア改善とデバッグ強化 ✅ 完了
 
-### v0.6.0 — 高度なデバッグ機能 + 表示改善
+- [x] ELF/DWARF、シンボルとソース位置の解決、`.elf` 直接読込
+- [x] 巻き戻し、`--lcd`、`--no-blur`
 
-**目標**: 本格的な開発ツールとしてのデバッグ環境、実機風表示
+### v0.8.0 — エコシステム統合と Web フロントエンド ✅ 中核実装完了
 
-- [x] RAM ビューア (リアルタイム hex + ASCII ダンプ、diff ビュー)
-- [x] I/O レジスタビューア (ATmega32u4 / ATmega328P 名前付き表示)
-- [x] メモリブレークポイント (ウォッチポイント: read/write/read-write、値マッチ)
-- [x] 実行プロファイラ (PC ヒストグラム → ホットスポット、コールグラフ、CPI)
-- [x] GDB Remote Serial Protocol サーバ (`--gdb <port>`)
-- [x] LCD エフェクト (L キー: カラーパレット + グリッド線 + 残像 + 角丸め)
-- [x] ぼかしフィルタ (B キー: 3×3 ボックスフィルタ)
-- [x] アスペクト比保持リサイズ (整数スケーリング)
-
-### v0.7.0 — コア改善 + デバッグ強化
-
-**目標**: ELF デバッグ対応と巻き戻し機能でゲーム開発ワークフローを完成
-
-- [x] ELF/DWARF パーサ (シンボルテーブル + ソース行マッピング)
-- [x] `.elf` ファイル直接読込 (flash + デバッグ情報同時ロード)
-- [x] ソースレベルデバッグ (PC → 関数名 + ファイル:行)
-- [x] 巻き戻し (Backspace キー: 0.5秒間隔スナップショット、最大5分)
-- [x] `--lcd` / `--no-blur` CLI オプション
-- [ ] Gamebuino Classic 実ゲームテスト + 互換性修正
-
-### v0.8.0 — エコシステム統合 + Web フロントエンド
-
-**目標**: コミュニティ連携と Web 版提供
-
-- [ ] ゲームリポジトリブラウザ (eried/ArduboyCollection JSON)
-- [ ] スキンシステム (Arduboy / Microcard / Pipboy / Tama)
-- [ ] WebAssembly (wasm32) ビルド対応 (core crate)
-- [ ] HTML/Canvas フロントエンド
-- [ ] Web Audio API によるオーディオ出力
-- [ ] キーボード入力 (Web)
-- [ ] ゲームパッド API (Web Gamepad API)
-- [ ] URL パラメータで .hex 読込
-- [ ] ドラッグ＆ドロップ ファイル読込 (Web)
+- [x] `wasm32-unknown-unknown` 向け `arduboy-wasm` バインディング
+- [x] HTML/Canvas 表示、Web Audio AudioWorklet、キーボード・タッチ入力
+- [x] `.hex` / `.arduboy` / FX 読込、URL パラメータ、ドラッグ＆ドロップ
+- [x] IndexedDB による EEPROM とセーブ状態の永続化
+- [x] Web 版の GIF / PNG、フルスクリーン、パレット、ポーズ / リセット
+- [ ] Web Gamepad API
+- [ ] オンラインゲームリポジトリブラウザ（ArduboyCollection 等）
+- [ ] スキンシステム（実機外観・縦画面レイアウト）
+- [ ] Web Worker 化（UI / 音声の応答性を保つため）
 
 ### v1.0.0 — 安定版リリース
 
-**目標**: 完成度を高め、安定版として公開する
+**目標**: 実機互換性を検証可能にし、再現性のある配布・公開を整える。
 
-- [ ] 全 AVR 命令の実装完了とテスト
-- [ ] ProjectABE 互換性テストスイート
-- [ ] CI/CD パイプライン
-- [ ] crates.io 公開 (arduboy-core)
-- [ ] GitHub Releases バイナリ配布 (Linux/macOS/Windows)
-- [ ] ドキュメント整備 (`cargo doc`)
-- [ ] Web 版の公開ホスティング
+- [ ] 未実装 AVR 命令・周辺機能の棚卸しと命令別テスト拡充
+- [ ] Arduboy / Gamebuino の互換性テストROM・回帰テストスイート
+- [ ] CI に `cargo fmt --check`、`cargo clippy`、`cargo test`、WASM ビルドを追加
+- [x] タグ起点の GitHub Actions による Windows / Linux / macOS パッケージ作成とドラフトリリース
+- [ ] GitHub Actions の成果物を実機・複数ROMで検証するリリース手順
+- [ ] crates.io 公開（`arduboy-core`）
+- [ ] API ドキュメント整備（`cargo doc`）
+- [ ] Web 版の正式ホスティングと、CORS を含む ROM URL 読込方針の明文化
+
+### v1.x 以降の候補
+
+- [ ] HC-SR04 など、利用実績のある外部ペリフェラルの追加
+- [ ] ProjectABE 互換のスキン / オンラインカタログ
+- [ ] IDE・コンパイル・実機書込みは、エミュレータ本体に統合するか外部ツール連携にするかを設計してから着手
