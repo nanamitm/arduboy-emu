@@ -22,11 +22,12 @@ Pages, Netlify, any static host).
 - Canvas rendering (128×64, crisp `pixelated` upscale), ~60 fps loop, with
   **scale** presets (Fit / 2×–8×) and **fullscreen**
 - **Palette themes**: White / Green LCD / Amber
-- **Device skins**: Arduboy, Microcard, and Tama layouts. Select one in the
-  toolbar, add `?skin=microcard` (or `tama`) to the URL, and the last selected
-  skin is restored on the next visit.
+- **Device skins**: Arduboy, Microcard, Tama, Pipboy 3000, and Pipboy Mk IV
+  layouts. Select one in the toolbar, add `?skin=pipboy` (or `pipboymkiv`) to
+  the URL, and the last selected skin is restored on the next visit.
 - Input: keyboard (**Arrows** = D-pad, **Z** = A, **X** = B) and **on-screen
-  touch controls** (D-pad + A/B) for mobile
+  touch controls** (D-pad + A/B) for mobile; standard **Gamepad API** support
+  (D-pad or left stick, A/X = A, B/Y = B)
 - Stereo audio via a single-threaded AudioWorklet (no SharedArrayBuffer, so no
   cross-origin isolation needed) with **volume** slider and **mute**
 - **Save states** (quick slot per ROM) and **EEPROM** auto-persistence, both
@@ -62,7 +63,7 @@ wasm must be served over HTTP (not `file://`):
 ```bash
 python -m http.server -d web 8080
 # open http://localhost:8080/
-# or /?rom=game.hex&skin=tama to auto-load a ROM with a skin
+# or /?rom=game.hex&skin=pipboy to auto-load a ROM with a skin
 ```
 
 ## Deploy to Cloudflare Pages
