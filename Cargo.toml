@@ -1,3 +1,3 @@
 [workspace]
-members = ["crates/core", "crates/frontend-minifb", "crates/ffi"]
+members = ["crates/core", "crates/frontend-minifb", "crates/ffi", "crates/wasm"]
 resolver = "2"

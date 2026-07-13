@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Arduboy Emulator — Web</title>
+<style>
+  :root {
+    --bg: #0b0d10;
+    --panel: #161a21;
+    --ink: #e6edf3;
+    --muted: #8b98a5;
+    --accent: #12b4c8;
+    --accent-2: #eb5c5c;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%;
+    background: radial-gradient(1200px 600px at 50% -10%, #12212a 0%, var(--bg) 60%);
+    color: var(--ink);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  body { display: flex; flex-direction: column; align-items: center; padding: 24px 16px 40px; }
+  header { text-align: center; margin-bottom: 18px; }
+  h1 { font-size: 20px; margin: 0 0 4px; letter-spacing: .3px; }
+  header p { margin: 0; color: var(--muted); font-size: 13px; }
+
+  .screen-wrap {
+    position: relative;
+    padding: 14px;
+    background: var(--panel);
+    border: 1px solid #232a33;
+    border-radius: 16px;
+    box-shadow: 0 10px 40px rgba(0,0,0,.45);
+  }
+  canvas#screen {
+    display: block;
+    width: min(90vw, 640px);
+    height: auto;
+    aspect-ratio: 2 / 1;
+    image-rendering: pixelated;
+    background: #000;
+    border-radius: 6px;
+    outline: 1px solid #0a2a30;
+  }
+
+  .bar {
+    display: flex; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: center;
+    margin-top: 16px;
+  }
+  button, label.file {
+    appearance: none; cursor: pointer;
+    background: #1d232c; color: var(--ink);
+    border: 1px solid #2b333d; border-radius: 8px;
+    padding: 8px 14px; font-size: 14px;
+  }
+  button:hover, label.file:hover { border-color: var(--accent); }
+  label.file input { display: none; }
+
+  .status {
+    margin-top: 12px; min-height: 20px;
+    color: var(--muted); font-size: 13px; text-align: center;
+  }
+  .hint { margin-top: 6px; color: var(--muted); font-size: 12px; text-align: center; }
+  kbd {
+    background: #0e1319; border: 1px solid #2b333d; border-bottom-width: 2px;
+    border-radius: 4px; padding: 1px 6px; font: 12px ui-monospace, monospace; color: var(--ink);
+  }
+
+  /* Drag-and-drop overlay */
+  #drop {
+    position: fixed; inset: 0; display: none;
+    align-items: center; justify-content: center;
+    background: rgba(8,11,14,.82); backdrop-filter: blur(2px);
+    color: var(--ink); font-size: 22px; z-index: 10;
+    border: 3px dashed var(--accent); border-radius: 12px; margin: 12px;
+  }
+  #drop.show { display: flex; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Arduboy Emulator — Web</h1>
+    <p>ATmega32u4 / ATmega328P · WebAssembly build of arduboy-core</p>
+  </header>
+
+  <div class="screen-wrap">
+    <canvas id="screen" width="128" height="64" tabindex="0"></canvas>
+  </div>
+
+  <div class="bar">
+    <label class="file">
+      Open ROM…
+      <input id="file" type="file" accept=".hex,.arduboy,.elf">
+    </label>
+    <button id="pause">Pause</button>
+    <button id="reset">Reset</button>
+    <button id="mute">Mute</button>
+  </div>
+
+  <div class="status" id="status">Loading emulator…</div>
+  <div class="hint">
+    <kbd>←↑↓→</kbd> D-pad &nbsp; <kbd>Z</kbd> A &nbsp; <kbd>X</kbd> B &nbsp;·&nbsp;
+    drop a <kbd>.hex</kbd> / <kbd>.arduboy</kbd> anywhere, or use “Open ROM…”.
+  </div>
+
+  <div id="drop">Drop a ROM to load</div>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
