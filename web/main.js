@@ -295,8 +295,11 @@ function toggleMute() {
   $('mute').textContent = muted ? 'Unmute' : 'Mute';
 }
 function applyScale(v) {
-  if (v === 'fit') canvas.style.removeProperty('--screen-w');
-  else canvas.style.setProperty('--screen-w', `${128 * Number(v)}px`);
+  // Device skins own the screen's geometry, so scaling only the canvas would
+  // make it overflow its bezel.  Keep the display fitted and scale the whole
+  // device instead; 5× preserves the original default visual size.
+  const zoom = v === 'fit' ? 1 : Number(v) / 5;
+  $('device').style.setProperty('--device-zoom', String(zoom));
 }
 function applySkin(requested) {
   skin = getSkin(requested);
