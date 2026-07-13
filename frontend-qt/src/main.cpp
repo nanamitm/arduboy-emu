@@ -1,5 +1,6 @@
 // Qt6 GUI client entry point for the arduboy-core emulator.
 #include <QApplication>
+#include <QIcon>
 
 #include "MainWindow.h"
 
@@ -7,6 +8,7 @@ int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
     QApplication::setApplicationName("Arduboy Emulator (Qt)");
     QApplication::setOrganizationName("arduboy-emu");
+    QApplication::setWindowIcon(QIcon(":/resources/app.png"));
 
     MainWindow win;
     win.show();

@@ -5,6 +5,7 @@ project(arduboy-qt LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
 
 # Qt6: Widgets for the UI, Multimedia for QAudioSink.
 find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia)
@@ -53,12 +54,20 @@ add_custom_command(
 add_custom_target(arduboy_ffi_build DEPENDS "${FFI_IMPLIB}")
 
 # ── Qt executable ────────────────────────────────────────────────────────────
+# Windows: app.rc embeds the .ico shown by Explorer / the taskbar.
+set(APP_PLATFORM_SOURCES "")
+if(WIN32)
+    set(APP_PLATFORM_SOURCES app.rc)
+endif()
+
 add_executable(arduboy-qt WIN32
     src/main.cpp
     src/MainWindow.cpp
     src/EmulatorCore.cpp
     src/DisplayWidget.cpp
-    src/AudioOutput.cpp)
+    src/AudioOutput.cpp
+    resources.qrc            # AUTORCC: window/taskbar icon inside the app
+    ${APP_PLATFORM_SOURCES})
 
 add_dependencies(arduboy-qt arduboy_ffi_build)
 
