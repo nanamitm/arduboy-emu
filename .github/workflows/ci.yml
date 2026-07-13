@@ -22,10 +22,11 @@ jobs:
           targets: wasm32-unknown-unknown
 
       - name: Install desktop audio build dependencies
-        # `rodio`/`cpal` use alsa-sys on Linux.  Clippy checks every workspace
-        # target, including the native frontend, so the ALSA pkg-config file is
-        # required even though the web client itself does not use it.
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev pkg-config
+        # `rodio`/`cpal` use alsa-sys and `gilrs` uses libudev-sys on Linux.
+        # Clippy checks every workspace target, including the native frontend,
+        # so both pkg-config files are required even though the web client
+        # itself does not use them.
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libudev-dev pkg-config
 
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
