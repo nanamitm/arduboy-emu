@@ -29,11 +29,52 @@
   h1 { font-size: 19px; margin: 0 0 2px; letter-spacing: .3px; }
   header p { margin: 0; color: var(--muted); font-size: 12px; }
 
+  /* Device skin -------------------------------------------------------------- */
+  #device {
+    --device-w: min(92vw, 430px);
+    --device-ratio: 0.625;
+    --screen-top: 18%; --screen-left: 10%; --screen-width: 80%;
+    --dpad-top: 53%; --dpad-left: 7%;
+    --ab-top: 57%; --ab-right: 8%;
+    --device-face: linear-gradient(145deg, #343c47, #11161c 58%, #2b313a);
+    --device-edge: #586371;
+    --screen-frame: #0a0d10;
+    position: relative; width: var(--device-w); aspect-ratio: var(--device-ratio);
+    border: 2px solid var(--device-edge); border-radius: 11% / 7%;
+    background: var(--device-face); box-shadow: 0 18px 45px rgba(0,0,0,.5),
+      inset 0 1px rgba(255,255,255,.16), inset 0 -12px 28px rgba(0,0,0,.3);
+  }
+  #device::before {
+    content: 'ARDUBOY'; position: absolute; top: 7%; left: 0; right: 0;
+    text-align: center; color: rgba(232,240,244,.65); font-weight: 700;
+    letter-spacing: .24em; font-size: clamp(10px, 3vw, 15px);
+  }
+  #device::after {
+    content: ''; position: absolute; top: 9%; left: 6%; width: 3px; height: 3px;
+    border-radius: 50%; background: #ce514d; box-shadow: 8px 0 #e7b94f;
+  }
+  #device.skin-microcard {
+    --device-ratio: 1.35; --screen-top: 18%; --screen-left: 22%; --screen-width: 56%;
+    --dpad-top: 63%; --dpad-left: 6%; --ab-top: 65%; --ab-right: 7%;
+    --device-face: linear-gradient(145deg, #467a86, #173a46 54%, #102832);
+    --device-edge: #70aeb6;
+  }
+  #device.skin-microcard::before { content: 'MICROCARD'; font-size: clamp(9px, 2.5vw, 13px); }
+  #device.skin-tama {
+    --device-ratio: .84; --screen-top: 30%; --screen-left: 21%; --screen-width: 58%;
+    --dpad-top: 62%; --dpad-left: 8%; --ab-top: 66%; --ab-right: 9%;
+    --device-face: radial-gradient(circle at 35% 22%, #fcf6ce, #e5c97a 48%, #b87a53);
+    --device-edge: #fff0ae; --screen-frame: #5d4a37;
+  }
+  #device.skin-tama::before { content: 'TAMA'; color: #805135; top: 12%; }
+  #device.skin-tama::after { top: 17%; left: 17%; background: #df6e78; box-shadow: 8px 0 #6db7d0; }
+
   /* Screen ------------------------------------------------------------------ */
   #stage {
-    padding: 14px; background: var(--panel);
-    border: 1px solid #232a33; border-radius: 16px;
-    box-shadow: 0 10px 40px rgba(0,0,0,.45);
+    position: absolute; top: var(--screen-top); left: var(--screen-left); width: var(--screen-width);
+    padding: clamp(5px, 1.6vw, 10px); background: var(--screen-frame);
+    border: 1px solid rgba(255,255,255,.14); border-radius: 5px;
+    box-shadow: 0 4px 10px rgba(0,0,0,.55), inset 0 0 0 2px #000;
   }
   #stage:fullscreen { display: flex; align-items: center; justify-content: center;
                       background: #000; border: 0; border-radius: 0; width: 100%; height: 100%; }
@@ -48,23 +89,25 @@
 
   /* Touch controls ---------------------------------------------------------- */
   #touch {
-    display: flex; justify-content: space-between; align-items: center;
-    width: min(92vw, 640px); margin-top: 14px; gap: 12px; user-select: none;
+    position: absolute; inset: 0; width: auto; margin: 0; user-select: none;
+    pointer-events: none;
   }
-  .dpad { display: grid; grid-template-columns: repeat(3, 52px); grid-template-rows: repeat(3, 52px); gap: 4px; }
+  .dpad { position: absolute; top: var(--dpad-top); left: var(--dpad-left); display: grid;
+    grid-template-columns: repeat(3, clamp(30px, 11vw, 52px)); grid-template-rows: repeat(3, clamp(30px, 11vw, 52px)); gap: 4px; }
   .dpad button { grid-area: auto; }
   .dpad .up    { grid-column: 2; grid-row: 1; }
   .dpad .left  { grid-column: 1; grid-row: 2; }
   .dpad .right { grid-column: 3; grid-row: 2; }
   .dpad .down  { grid-column: 2; grid-row: 3; }
-  .ab { display: flex; align-items: center; gap: 16px; }
+  .ab { position: absolute; top: var(--ab-top); right: var(--ab-right); display: flex; align-items: center; gap: clamp(7px, 3vw, 16px); }
   .pad {
     appearance: none; border: 1px solid var(--edge); background: var(--panel-2);
     color: var(--ink); font-size: 16px; font-weight: 600; border-radius: 12px;
-    width: 52px; height: 52px; display: flex; align-items: center; justify-content: center;
+    width: clamp(30px, 11vw, 52px); height: clamp(30px, 11vw, 52px); display: flex; align-items: center; justify-content: center;
     touch-action: none; cursor: pointer;
+    pointer-events: auto;
   }
-  .ab .pad { width: 64px; height: 64px; border-radius: 50%; font-size: 20px; }
+  .ab .pad { width: clamp(38px, 13vw, 64px); height: clamp(38px, 13vw, 64px); border-radius: 50%; font-size: clamp(14px, 4vw, 20px); }
   .ab .a { background: #3a2020; border-color: #6e3535; }
   .ab .b { background: #3a3320; border-color: #6e6035; }
   .pad.active { border-color: var(--accent); background: #123038; }
@@ -105,11 +148,7 @@
   }
   #drop.show { display: flex; }
 
-  @media (max-width: 480px) {
-    .dpad { grid-template-columns: repeat(3, 46px); grid-template-rows: repeat(3, 46px); }
-    .pad { width: 46px; height: 46px; }
-    .ab .pad { width: 58px; height: 58px; }
-  }
+  @media (max-width: 360px) { body { padding-inline: 6px; } }
 </style>
 </head>
 <body>
@@ -118,20 +157,21 @@
     <p>ATmega32u4 / ATmega328P · WebAssembly build of arduboy-core</p>
   </header>
 
-  <div id="stage">
-    <canvas id="screen" width="128" height="64" tabindex="0"></canvas>
-  </div>
-
-  <div id="touch">
-    <div class="dpad">
-      <button class="pad up"    data-btn="0" aria-label="Up">▲</button>
-      <button class="pad left"  data-btn="2" aria-label="Left">◀</button>
-      <button class="pad right" data-btn="3" aria-label="Right">▶</button>
-      <button class="pad down"  data-btn="1" aria-label="Down">▼</button>
+  <div id="device" class="skin-arduboy">
+    <div id="stage">
+      <canvas id="screen" width="128" height="64" tabindex="0"></canvas>
     </div>
-    <div class="ab">
-      <button class="pad b" data-btn="5" aria-label="B">B</button>
-      <button class="pad a" data-btn="4" aria-label="A">A</button>
+    <div id="touch">
+      <div class="dpad">
+        <button class="pad up"    data-btn="0" aria-label="Up">▲</button>
+        <button class="pad left"  data-btn="2" aria-label="Left">◀</button>
+        <button class="pad right" data-btn="3" aria-label="Right">▶</button>
+        <button class="pad down"  data-btn="1" aria-label="Down">▼</button>
+      </div>
+      <div class="ab">
+        <button class="pad b" data-btn="5" aria-label="B">B</button>
+        <button class="pad a" data-btn="4" aria-label="A">A</button>
+      </div>
     </div>
   </div>
 
@@ -164,6 +204,9 @@
           <option value="green">Green LCD</option>
           <option value="amber">Amber</option>
         </select>
+      </label>
+      <label class="ctl">Skin
+        <select id="skin" aria-label="Device skin"></select>
       </label>
       <label class="ctl">Volume
         <input id="vol" type="range" min="0" max="100" value="60">

@@ -5,6 +5,7 @@
 // quick save states, and per-ROM EEPROM/state persistence in IndexedDB.
 
 import init, { AbEmu } from './pkg/arduboy.js';
+import { DEFAULT_SKIN, SKINS, getSkin } from './skins.js';
 
 const BASE_VOLUME = 0.25;     // scaled by the volume slider
 const STEP_MS = 1000 / 60;    // Arduboy runs at 60 fps
@@ -21,6 +22,7 @@ let romName = '';
 let volume = 0.6;
 let muted = false;
 let palette = 'white';
+let skin = DEFAULT_SKIN;
 
 // ── Palette themes (lit / unlit RGB) ─────────────────────────────────────────
 const PALETTES = {
@@ -244,6 +246,13 @@ function applyScale(v) {
   if (v === 'fit') canvas.style.removeProperty('--screen-w');
   else canvas.style.setProperty('--screen-w', `${128 * Number(v)}px`);
 }
+function applySkin(requested) {
+  skin = getSkin(requested);
+  const device = $('device');
+  device.className = SKINS[skin].className;
+  $('skin').value = skin;
+  localStorage.setItem('arduboy.skin', skin);
+}
 function toggleFullscreen() {
   const stage = $('stage');
   if (document.fullscreenElement) document.exitFullscreen();
@@ -328,6 +337,16 @@ async function main() {
   draw();
   setStatus('Open a ROM to start (.hex / .arduboy)');
 
+  const skinSelect = $('skin');
+  for (const [key, value] of Object.entries(SKINS)) {
+    const option = document.createElement('option');
+    option.value = key;
+    option.textContent = `${value.label} — ${value.description}`;
+    skinSelect.append(option);
+  }
+  const requestedSkin = new URLSearchParams(location.search).get('skin') || localStorage.getItem('arduboy.skin');
+  applySkin(requestedSkin);
+
   const frame = (now) => { loop(now); fpsTick(); requestAnimationFrame(frame); };
   requestAnimationFrame((t) => { lastTime = t; requestAnimationFrame(frame); });
 
@@ -353,6 +372,7 @@ async function main() {
   $('vol').addEventListener('input', (e) => { volume = e.target.value / 100; });
   $('scale').addEventListener('change', (e) => applyScale(e.target.value));
   $('palette').addEventListener('change', (e) => { palette = e.target.value; if (running) draw(); });
+  skinSelect.addEventListener('change', (e) => applySkin(e.target.value));
 
   applyScale($('scale').value);
 
