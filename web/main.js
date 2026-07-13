@@ -4,7 +4,6 @@
 // input, ROM drag-and-drop, palette themes, PNG screenshots, GIF recording,
 // quick save states, and per-ROM EEPROM/state persistence in IndexedDB.
 
-import init, { AbEmu } from './pkg/arduboy.js';
 import { DEFAULT_SKIN, SKINS, getSkin } from './skins.js';
 
 const BASE_VOLUME = 0.25;     // scaled by the volume slider
@@ -14,7 +13,6 @@ const $ = (id) => document.getElementById(id);
 const canvas = $('screen');
 const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
-let emu = null;
 let imageData = null;
 let running = false;
 let paused = false;
@@ -26,6 +24,54 @@ let skin = DEFAULT_SKIN;
 const inputSources = Array.from({ length: 6 }, () => new Set());
 const activeGamepads = new Set();
 let catalog = null;
+let worker = null;
+let workerRequest = 0;
+let stepPending = false;
+let latestLeds = { rgb: [0, 0, 0], tx: false, rx: false };
+let latestFrame = null;
+const workerRequests = new Map();
+
+function workerCall(type, payload = {}, transfer = []) {
+  const id = ++workerRequest;
+  return new Promise((resolve, reject) => {
+    workerRequests.set(id, { resolve, reject });
+    worker.postMessage({ id, type, payload }, transfer);
+  });
+}
+
+function workerNotify(type, payload = {}, transfer = []) {
+  worker.postMessage({ id: 0, type, payload }, transfer);
+}
+
+function initWorker() {
+  worker = new Worker('./emulator-worker.js', { type: 'module' });
+  worker.addEventListener('message', ({ data }) => {
+    if (data.type === 'frame') {
+      stepPending = false;
+      latestLeds = { rgb: data.led, tx: data.tx, rx: data.rx };
+      latestFrame = new Uint8Array(data.frame);
+      draw(latestFrame);
+      if (data.audio && audioNode && !muted) {
+        const samples = new Float32Array(data.audio);
+        audioNode.port.postMessage(samples, [samples.buffer]);
+      }
+      updateLeds();
+      return;
+    }
+    if (data.type !== 'response' || !data.id) return;
+    const request = workerRequests.get(data.id);
+    if (!request) return;
+    workerRequests.delete(data.id);
+    if (data.error) request.reject(new Error(data.error));
+    else request.resolve(data.result);
+  });
+  worker.addEventListener('error', (event) => {
+    for (const { reject } of workerRequests.values()) reject(event.error || new Error(event.message));
+    workerRequests.clear();
+    setStatus(`Emulator worker failed: ${event.message}`, true);
+  });
+  return workerCall('init');
+}
 
 // ── Palette themes (lit / unlit RGB) ─────────────────────────────────────────
 const PALETTES = {
@@ -55,8 +101,8 @@ async function ensureAudio() {
 }
 
 // ── Rendering ────────────────────────────────────────────────────────────────
-function draw() {
-  const f = emu.frame();
+function draw(f) {
+  if (!imageData || !f) return;
   const d = imageData.data;
   const pal = PALETTES[palette];
   if (!pal) {
@@ -81,18 +127,16 @@ function loop(now) {
   lastTime = now;
   if (acc > 250) acc = 250;
 
-  let stepped = false;
-  const rate = audioCtx ? audioCtx.sampleRate : 48000;
-  while (acc >= STEP_MS) {
-    emu.runFrame();
-    if (audioNode && !muted) {
-      const s = emu.renderAudio(rate, BASE_VOLUME * volume);
-      audioNode.port.postMessage(s, [s.buffer]);
-    }
+  // Never queue frames: if the worker is still busy, retain only the current
+  // timing debt and send the next frame when it completes.
+  if (acc >= STEP_MS && !stepPending) {
     acc -= STEP_MS;
-    stepped = true;
+    stepPending = true;
+    workerNotify('step', {
+      sampleRate: audioCtx ? audioCtx.sampleRate : 48000,
+      volume: audioNode && !muted ? BASE_VOLUME * volume : 0,
+    });
   }
-  if (stepped) { draw(); updateLeds(); }
 }
 
 // ── Input aggregation / gamepads ───────────────────────────────────────────
@@ -104,7 +148,7 @@ function setInput(button, source, pressed) {
   if (pressed) sources.add(source);
   else sources.delete(source);
   const isPressed = sources.size > 0;
-  if (wasPressed !== isPressed && emu) emu.setButton(button, isPressed);
+  if (wasPressed !== isPressed && worker) workerNotify('setButton', { button, pressed: isPressed });
   const pad = document.querySelector(`.pad[data-btn="${button}"]`);
   if (pad) pad.classList.toggle('active', isPressed);
 }
@@ -177,8 +221,8 @@ async function idbGet(store, key) {
 }
 
 async function persistEeprom() {
-  if (!running || !romName || !emu.eepromDirty()) return;
-  try { await idbPut('eeprom', romName, emu.saveEeprom()); } catch (e) { /* quota */ }
+  if (!running || !romName || !await workerCall('eepromDirty')) return;
+  try { await idbPut('eeprom', romName, await workerCall('saveEeprom')); } catch (e) { /* quota */ }
 }
 
 // ── ROM loading ────────────────────────────────────────────────────────────
@@ -189,7 +233,7 @@ async function loadRom(file) {
 async function loadRomBytes(name, bytes) {
   await persistEeprom(); // flush the previous game's EEPROM first
   try {
-    emu.loadFile(name, bytes);
+    const result = await workerCall('loadFile', { name, data: bytes.buffer }, [bytes.buffer]);
   } catch (err) {
     setStatus(`Load failed: ${err}`, true);
     return;
@@ -199,7 +243,10 @@ async function loadRomBytes(name, bytes) {
   // Restore this ROM's saved EEPROM, if any.
   try {
     const saved = await idbGet('eeprom', romName);
-    if (saved && saved.length) emu.loadEeprom(new Uint8Array(saved));
+    if (saved && saved.length) {
+      const data = new Uint8Array(saved);
+      await workerCall('loadEeprom', { data: data.buffer }, [data.buffer]);
+    }
   } catch (e) { /* ignore */ }
 
   await ensureAudio();
@@ -207,7 +254,7 @@ async function loadRomBytes(name, bytes) {
   paused = false;
   $('pause').textContent = 'Pause';
   setControlsEnabled(true);
-  const cpu = emu.cpuType() === 1 ? 'ATmega328P' : 'ATmega32u4';
+  const cpu = result.cpuType === 1 ? 'ATmega328P' : 'ATmega32u4';
   $('cpu').textContent = cpu;
   setStatus(`Loaded ${name}`);
   canvas.focus();
@@ -311,7 +358,7 @@ async function loadCatalogRom(game) {
 async function saveState() {
   if (!running) return;
   try {
-    await idbPut('states', romName, emu.saveState());
+    await idbPut('states', romName, await workerCall('saveState'));
     setStatus('State saved');
   } catch (err) {
     setStatus(`Save failed: ${err}`, true);
@@ -322,7 +369,8 @@ async function loadState() {
   try {
     const bytes = await idbGet('states', romName);
     if (!bytes) { setStatus('No saved state for this ROM'); return; }
-    emu.loadState(new Uint8Array(bytes));
+    const data = new Uint8Array(bytes);
+    await workerCall('loadState', { data: data.buffer }, [data.buffer]);
     setStatus('State loaded');
   } catch (err) {
     setStatus(`Load failed: ${err}`, true);
@@ -343,17 +391,17 @@ function screenshot() {
   if (!running) return;
   canvas.toBlob((b) => { if (b) download(b, `${baseName()}-${stamp()}.png`); }, 'image/png');
 }
-function toggleGif() {
+async function toggleGif() {
   if (!running) return;
   const btn = $('gif');
-  if (emu.gifRecording()) {
-    const bytes = emu.gifStop();
+  if (await workerCall('gifRecording')) {
+    const bytes = await workerCall('gifStop');
     btn.classList.remove('recording');
     btn.textContent = '● Rec GIF';
     if (bytes.length) download(new Blob([bytes], { type: 'image/gif' }), `${baseName()}-${stamp()}.gif`);
     setStatus('GIF saved');
   } else {
-    emu.gifStart();
+    await workerCall('gifStart');
     btn.classList.add('recording');
     btn.textContent = '■ Stop';
     setStatus('Recording GIF…');
@@ -367,9 +415,9 @@ function togglePause() {
   $('pause').textContent = paused ? 'Resume' : 'Pause';
   if (!paused) ensureAudio();
 }
-function reset() {
+async function reset() {
   if (!running) return;
-  emu.reset();
+  await workerCall('reset');
   if (paused) { paused = false; $('pause').textContent = 'Pause'; ensureAudio(); }
 }
 function toggleMute() {
@@ -407,10 +455,10 @@ function setControlsEnabled(on) {
 }
 function updateLeds() {
   if (!running) return;
-  const [r, g, b] = emu.ledRgb();
+  const [r, g, b] = latestLeds.rgb;
   $('rgb').style.background = `rgb(${r},${g},${b})`;
-  $('tx').style.background = emu.ledTx() ? 'var(--good)' : '#333';
-  $('rx').style.background = emu.ledRx() ? 'var(--good)' : '#333';
+  $('tx').style.background = latestLeds.tx ? 'var(--good)' : '#333';
+  $('rx').style.background = latestLeds.rx ? 'var(--good)' : '#333';
 }
 
 // FPS meter (sampled from the render loop).
@@ -450,7 +498,7 @@ function wireTouch() {
   for (const pad of document.querySelectorAll('.pad')) {
     const btn = Number(pad.dataset.btn);
     const press = (on) => {
-      if (!emu) return;
+      if (!worker) return;
       setInput(btn, `touch-${btn}`, on);
     };
     pad.addEventListener('pointerdown', (e) => {
@@ -473,11 +521,12 @@ async function main() {
       console.warn('Service worker registration failed:', err);
     });
   }
-  await init();
-  emu = new AbEmu();
-  window.__abemu = emu; // debugging / testing
-  imageData = ctx.createImageData(AbEmu.screenWidth(), AbEmu.screenHeight());
-  draw();
+  const dimensions = await initWorker();
+  // A small debug facade keeps command inspection possible without exposing
+  // the worker-owned wasm instance to the UI thread.
+  window.__abemu = { call: workerCall };
+  imageData = ctx.createImageData(dimensions.width, dimensions.height);
+  if (latestFrame) draw(latestFrame);
   setStatus('Open a ROM to start (.hex / .arduboy)');
 
   const skinSelect = $('skin');
@@ -507,7 +556,8 @@ async function main() {
   $('fx').addEventListener('change', async (e) => {
     const f = e.target.files[0];
     if (!f) return;
-    emu.loadFx(new Uint8Array(await f.arrayBuffer()));
+    const data = new Uint8Array(await f.arrayBuffer());
+    await workerCall('loadFx', { data: data.buffer }, [data.buffer]);
     setStatus(`FX loaded: ${f.name}`);
   });
   $('pause').addEventListener('click', togglePause);
@@ -520,7 +570,7 @@ async function main() {
   $('mute').addEventListener('click', toggleMute);
   $('vol').addEventListener('input', (e) => { volume = e.target.value / 100; });
   $('scale').addEventListener('change', (e) => applyScale(e.target.value));
-  $('palette').addEventListener('change', (e) => { palette = e.target.value; if (running) draw(); });
+  $('palette').addEventListener('change', (e) => { palette = e.target.value; if (latestFrame) draw(latestFrame); });
   skinSelect.addEventListener('change', (e) => applySkin(e.target.value));
 
   applyScale($('scale').value);

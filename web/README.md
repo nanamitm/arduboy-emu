@@ -6,10 +6,10 @@ small vanilla-JS frontend — a `<canvas>` for video, the Web Audio API
 (AudioWorklet) for sound, and keyboard + drag-and-drop for input.
 
 ```
-┌───────────────┐        ┌──────────────────┐  wasm   ┌──────────────┐
-│ index.html/JS │ ─────► │ arduboy_bg.wasm  │ ──────► │ arduboy-core │
-│ canvas/audio  │  glue  │ (wasm-bindgen)   │         │  (emulator)  │
-└───────────────┘        └──────────────────┘         └──────────────┘
+┌──────────────────────┐ postMessage ┌──────────────────┐  wasm   ┌──────────────┐
+│ index.html / main.js │ ◀─────────► │ emulator-worker  │ ──────► │ arduboy-core │
+│ Canvas / AudioWorklet │  frame/audio │ (wasm-bindgen)  │         │  (emulator)  │
+└──────────────────────┘              └──────────────────┘         └──────────────┘
 ```
 
 No server-side code — it deploys as static files (Cloudflare Pages, GitHub
@@ -21,6 +21,9 @@ Pages, Netlify, any static host).
   `?rom=<url>` deep link; optional **FX flash** `.bin` loading
 - Canvas rendering (128×64, crisp `pixelated` upscale), ~60 fps loop, with
   **scale** presets (Fit / 2×–8×) and **fullscreen**
+- **Web Worker emulation**: the Wasm core runs outside the UI thread. Video
+  frames and PCM audio are transferred as `ArrayBuffer`s, keeping controls and
+  menus responsive without requiring cross-origin isolation.
 - **Palette themes**: White / Green LCD / Amber
 - **Device skins**: Arduboy, Microcard, Tama, Pipboy 3000, and Pipboy Mk IV
   layouts. Select one in the toolbar, add `?skin=pipboy` (or `pipboymkiv`) to

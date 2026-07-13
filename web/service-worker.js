@@ -1,10 +1,11 @@
 // Offline shell for the installable web client. Upstream ROM downloads remain
 // network requests so their licenses and latest versions stay with their host.
-const CACHE_NAME = 'arduboy-web-v1';
+const CACHE_NAME = 'arduboy-web-v2';
 const APP_SHELL = [
   './',
   './index.html',
   './main.js',
+  './emulator-worker.js',
   './skins.js',
   './audio-worklet.js',
   './manifest.webmanifest',
