@@ -1,0 +1,15 @@
+[package]
+name = "arduboy-ffi"
+version = "0.8.1"
+edition = "2021"
+description = "C FFI layer for arduboy-core (for Qt/C++ and other native frontends)"
+license = "MIT OR Apache-2.0"
+
+[lib]
+name = "arduboy_ffi"
+# cdylib -> arduboy_ffi.dll / libarduboy_ffi.so (loaded/linked by the Qt client)
+# staticlib -> arduboy_ffi.lib / libarduboy_ffi.a (optional static linking)
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+arduboy-core = { path = "../core" }

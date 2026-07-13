@@ -47,14 +47,23 @@ checksum = "5f0e0fee31ef5ed1ba1316088939cea399010ed7731dba877ed44aeb407a75ea"
 
 [[package]]
 name = "arduboy-core"
-version = "0.7.2"
+version = "0.8.1"
 dependencies = [
+ "bincode",
  "miniz_oxide",
+ "serde",
+]
+
+[[package]]
+name = "arduboy-ffi"
+version = "0.8.1"
+dependencies = [
+ "arduboy-core",
 ]
 
 [[package]]
 name = "arduboy-frontend"
-version = "0.7.2"
+version = "0.8.1"
 dependencies = [
  "arduboy-core",
  "gilrs",
@@ -73,6 +82,15 @@ name = "autocfg"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
+
+[[package]]
+name = "bincode"
+version = "1.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1f45e9417d87227c7a56d22e471c6206462cba514c7590c09aff4cf6d1ddcad"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "bindgen"
