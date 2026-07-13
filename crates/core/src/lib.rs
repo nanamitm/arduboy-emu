@@ -195,6 +195,9 @@ pub struct Arduboy {
     rng_state: u32,
     /// Debug counter: total SPDR writes since reset
     pub dbg_spdr_writes: u64,
+    /// Count of unknown/illegal opcodes executed since reset (0 for well-behaved
+    /// ROMs; non-zero usually means the CPU ran off into data as code).
+    pub unknown_ops: u64,
     /// Display type detection
     pub display_type: DisplayType,
     /// PCD8544 display (Gamebuino)
@@ -429,6 +432,7 @@ impl Arduboy {
             spi_out: Vec::new(),
             rng_state: 0xDEAD_BEEF,
             dbg_spdr_writes: 0,
+            unknown_ops: 0,
             display_type: if cpu_type == CpuType::Atmega328p {
                 DisplayType::Pcd8544
             } else {
@@ -593,6 +597,7 @@ impl Arduboy {
         } else {
             0xFF
         };
+        self.unknown_ops = 0;
         self.dbg_fx_transfers = 0;
         self.dbg_fx_cs_count = 0;
         self.dbg_fx_bytes_in_cs = 0;

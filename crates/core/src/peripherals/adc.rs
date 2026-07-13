@@ -1,9 +1,12 @@
 //! Analog-to-digital converter emulation.
 //!
 //! Returns pseudo-random values via xorshift PRNG to simulate noisy analog
-//! readings. The ADSC (start conversion) bit in ADCSRA triggers a conversion;
-//! the result is placed in ADCH:ADCL and ADSC is cleared to signal completion.
-//! This allows `analogRead()` and `initRandomSeed()` to function correctly.
+//! readings. Setting ADSC in ADCSRA while the ADC is enabled (ADEN) starts a
+//! conversion; [`update`](Adc::update) then completes it — placing the result in
+//! ADCH:ADCL, clearing ADSC (so `while (ADCSRA & _BV(ADSC))` polling exits) and
+//! setting ADIF for interrupt-driven use. Writing ADSC while ADEN is clear has
+//! no effect (ADSC reads back 0), matching hardware. This lets `analogRead()`
+//! and `initRandomSeed()` work in both polling and interrupt modes.
 
 use super::INT_ADC;
 
@@ -38,16 +41,22 @@ impl Adc {
     }
 
     /// Returns true if addr was handled
-    pub fn write(&mut self, addr: u16, value: u8, rng: &mut u32) -> bool {
+    pub fn write(&mut self, addr: u16, value: u8, _rng: &mut u32) -> bool {
         if addr == ADCSRA {
             self.aden = value & 0x80 != 0;
-            self.adsc = value & 0x40 != 0;
             self.adie = value & 0x08 != 0;
-            self.adif = value & 0x10 != 0;
-            if self.aden && self.adsc {
-                // Instant conversion with random result
-                self.adch = xorshift(rng);
-                self.adcl = xorshift(rng);
+            // ADIF is cleared by writing a logical 1 to it.
+            if value & 0x10 != 0 {
+                self.adif = false;
+            }
+            // A conversion only starts when the ADC is enabled. Writing ADSC
+            // with ADEN clear has no effect and ADSC reads back as 0. The
+            // conversion itself completes in `update`.
+            if self.aden {
+                if value & 0x40 != 0 {
+                    self.adsc = true;
+                }
+            } else {
                 self.adsc = false;
             }
             return true;
@@ -81,11 +90,13 @@ impl Adc {
     }
 
     pub fn update(&mut self, rng: &mut u32) {
-        if self.aden && self.adie {
-            self.adif = true;
-            self.adsc = false;
+        // Complete an in-progress conversion. Works for both polling (software
+        // watches ADSC) and interrupt-driven (ADIF/ADIE) use.
+        if self.aden && self.adsc {
             self.adch = xorshift(rng);
             self.adcl = xorshift(rng);
+            self.adsc = false;
+            self.adif = true;
         }
     }
 
@@ -125,4 +136,48 @@ fn xorshift(state: &mut u32) -> u8 {
     *state ^= *state >> 17;
     *state ^= *state << 5;
     (*state & 0xFF) as u8
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn adsc_set(adc: &Adc) -> bool {
+        adc.read(ADCSRA).unwrap() & 0x40 != 0
+    }
+
+    #[test]
+    fn polling_conversion_completes_via_update() {
+        let mut adc = Adc::new();
+        let mut rng = 0x1234_5678;
+        adc.write(ADCSRA, 0x80, &mut rng); // enable ADC
+        adc.write(ADCSRA, 0xC0, &mut rng); // ADEN + ADSC: start conversion
+        assert!(adsc_set(&adc), "ADSC should read 1 while converting");
+        adc.update(&mut rng);
+        assert!(!adsc_set(&adc), "ADSC should clear on completion");
+        assert!(adc.adif, "ADIF should be set on completion");
+    }
+
+    #[test]
+    fn adsc_without_aden_has_no_effect() {
+        // Regression: a ROM writing ADCSRA = 0x40 (ADSC set, ADEN clear) must not
+        // latch ADSC, else `while (ADCSRA & _BV(ADSC))` hangs forever.
+        let mut adc = Adc::new();
+        let mut rng = 0x1234_5678;
+        adc.write(ADCSRA, 0x40, &mut rng);
+        assert!(!adsc_set(&adc), "ADSC must read 0 when ADEN is clear");
+        adc.update(&mut rng);
+        assert!(!adsc_set(&adc));
+    }
+
+    #[test]
+    fn interrupt_conversion_sets_adif_and_fires() {
+        let mut adc = Adc::new();
+        let mut rng = 0x1234_5678;
+        adc.write(ADCSRA, 0x88, &mut rng); // ADEN + ADIE
+        adc.write(ADCSRA, 0xC8, &mut rng); // + ADSC
+        adc.update(&mut rng);
+        assert_eq!(adc.check_interrupt(), Some(INT_ADC));
+        assert_eq!(adc.check_interrupt(), None); // fires once
+    }
 }

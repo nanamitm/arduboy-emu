@@ -972,6 +972,7 @@ impl Arduboy {
                 1
             }
             Instruction::Unknown(w) => {
+                self.unknown_ops = self.unknown_ops.saturating_add(1);
                 if self.debug {
                     eprintln!(
                         "UNKNOWN OPCODE 0x{:04X} at pc=0x{:04X}",
