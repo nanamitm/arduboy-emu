@@ -4,6 +4,7 @@
 #include "DisplayWidget.h"
 
 #include <QAction>
+#include <QActionGroup>
 #include <QApplication>
 #include <QCloseEvent>
 #include <QDateTime>
@@ -20,6 +21,7 @@
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QPlainTextEdit>
+#include <QSettings>
 #include <QStatusBar>
 #include <QTimer>
 
@@ -33,6 +35,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     setAcceptDrops(true); // drag a .hex/.arduboy/.elf onto the window to load it
 
     m_display = new DisplayWidget(this);
+    QSettings settings;
+    const int savedSkin = settings.value(QStringLiteral("view/skin"), 0).toInt();
+    if (savedSkin >= 0 && savedSkin <= static_cast<int>(DisplayWidget::Skin::PipboyMkIv))
+        m_display->setSkin(static_cast<DisplayWidget::Skin>(savedSkin));
     setCentralWidget(m_display);
 
     m_audio = new AudioOutput(this);
@@ -103,6 +109,18 @@ void MainWindow::buildMenus() {
                         this, [this, s]() { setScale(s); });
     }
     view->addSeparator();
+    QMenu *skins = view->addMenu(tr("&Skin"));
+    QActionGroup *skinGroup = new QActionGroup(this);
+    skinGroup->setExclusive(true);
+    const QStringList skinNames = {tr("Arduboy"), tr("Microcard"), tr("Tama"),
+                                   tr("Pip-Boy 3000"), tr("Pip-Boy Mk IV")};
+    for (int i = 0; i < skinNames.size(); ++i) {
+        QAction *skin = skins->addAction(skinNames.at(i));
+        skin->setCheckable(true);
+        skin->setChecked(i == static_cast<int>(m_display->skin()));
+        skinGroup->addAction(skin);
+        connect(skin, &QAction::triggered, this, [this, i]() { setSkin(i); });
+    }
     view->addAction(tr("&Fullscreen"), QKeySequence(Qt::Key_F11), this,
                     &MainWindow::toggleFullscreen);
     QAction *smooth = view->addAction(tr("&Smooth scaling"));
@@ -273,13 +291,20 @@ void MainWindow::setScale(int factor) {
     m_scale = qBound(1, factor, 6);
     if (isFullScreen())
         return;
-    // Size the central display; the window grows to fit.
-    const int w = EmulatorCore::screenWidth() * m_scale;
-    const int h = EmulatorCore::screenHeight() * m_scale;
-    m_display->setMinimumSize(w, h);
-    resize(w, h + menuBar()->height() + statusBar()->height());
+    // Size the whole device skin so its display area remains at the selected scale.
+    const QSize size = m_display->scaledSize(m_scale);
+    m_display->setMinimumSize(size);
+    resize(size.width(), size.height() + menuBar()->height() + statusBar()->height());
     m_display->setMinimumSize(EmulatorCore::screenWidth(),
                               EmulatorCore::screenHeight());
+}
+
+void MainWindow::setSkin(int skin) {
+    if (skin < 0 || skin > static_cast<int>(DisplayWidget::Skin::PipboyMkIv))
+        return;
+    m_display->setSkin(static_cast<DisplayWidget::Skin>(skin));
+    QSettings().setValue(QStringLiteral("view/skin"), skin);
+    setScale(m_scale);
 }
 
 // ─── Input ──────────────────────────────────────────────────────────────────

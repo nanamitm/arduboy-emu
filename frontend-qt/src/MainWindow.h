@@ -45,6 +45,7 @@ private slots:
     void toggleRegisters();
     void toggleFullscreen();
     void setScale(int factor);
+    void setSkin(int skin);
     void about();
 
 private:

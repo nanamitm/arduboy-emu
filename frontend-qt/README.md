@@ -19,8 +19,9 @@ and forwards input. All state lives in the Rust core.
 - Load `.hex`, `.arduboy`, and `.elf` ROMs (companion FX `.bin` and `.eep`
   EEPROM files auto-detected), with CPU auto-detection (ATmega32u4 / ATmega328P)
 - **Drag & drop** a ROM file onto the window to load it (or **File ▸ Open ROM…**)
-- Scaled display (1×–6×), aspect-correct letterboxing, nearest / smooth scaling,
-  fullscreen (F11)
+- Five switchable vector-rendered device skins (Arduboy, Microcard, Tama,
+  Pip-Boy 3000, Pip-Boy Mk IV), persisted between launches via **View ▸ Skin**
+- Scaled display (1×–6×), nearest / smooth scaling, fullscreen (F11)
 - Keyboard input: **Arrows** = D-pad, **Z** = A, **X** = B
 - Stereo audio via `QAudioSink` (sample-accurate output from the core)
 - Save/load state (F5/F9), PNG screenshots (S), animated GIF recording (G)

@@ -9,6 +9,14 @@
 class DisplayWidget : public QWidget {
     Q_OBJECT
 public:
+    enum class Skin {
+        Arduboy,
+        Microcard,
+        Tama,
+        Pipboy,
+        PipboyMkIv,
+    };
+
     explicit DisplayWidget(QWidget *parent = nullptr);
 
     // Update the displayed image (a shallow copy; the pixels are memcpy'd by the
@@ -19,6 +27,10 @@ public:
     void setSmooth(bool smooth);
     bool smooth() const { return m_smooth; }
 
+    void setSkin(Skin skin);
+    Skin skin() const { return m_skin; }
+    QSize scaledSize(int screenScale) const;
+
     QSize sizeHint() const override;
 
 protected:
@@ -27,4 +39,5 @@ protected:
 private:
     QImage m_frame;
     bool m_smooth = false;
+    Skin m_skin = Skin::Arduboy;
 };
