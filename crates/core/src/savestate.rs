@@ -228,10 +228,14 @@ pub struct SaveState {
     pub audio_right_level: bool,
 }
 
-// ─── File I/O ───────────────────────────────────────────────────────────────
+// ─── Serialization ──────────────────────────────────────────────────────────
 
-/// Save state to file with header and deflate compression.
-pub fn save_to_file(state: &SaveState, cpu_type_byte: u8, path: &Path) -> Result<(), String> {
+/// Serialize a save state to a self-describing byte blob (header + deflate).
+///
+/// Layout: `MAGIC(4) | version(4 LE) | cpu_type(1) | deflate(bincode(state))`.
+/// This is the same container [`save_to_file`] writes, so blobs are
+/// interchangeable between the desktop (file) and web (IndexedDB/bytes) paths.
+pub fn save_to_bytes(state: &SaveState, cpu_type_byte: u8) -> Result<Vec<u8>, String> {
     let payload = bincode::serialize(state)
         .map_err(|e| format!("Serialize error: {}", e))?;
 
@@ -242,21 +246,17 @@ pub fn save_to_file(state: &SaveState, cpu_type_byte: u8, path: &Path) -> Result
     out.extend_from_slice(&FORMAT_VERSION.to_le_bytes());
     out.push(cpu_type_byte);
     out.extend_from_slice(&compressed);
-
-    std::fs::write(path, &out)
-        .map_err(|e| format!("Write error: {}", e))
+    Ok(out)
 }
 
-/// Load state from file, verifying magic, version, and CPU type.
-pub fn load_from_file(path: &Path, expected_cpu_type: u8) -> Result<SaveState, String> {
-    let data = std::fs::read(path)
-        .map_err(|e| format!("Read error: {}", e))?;
-
+/// Parse a save state blob produced by [`save_to_bytes`], verifying magic,
+/// version, and CPU type.
+pub fn load_from_bytes(data: &[u8], expected_cpu_type: u8) -> Result<SaveState, String> {
     if data.len() < 9 {
-        return Err("File too small".into());
+        return Err("Save state too small".into());
     }
     if &data[0..4] != MAGIC {
-        return Err("Invalid save state file (bad magic)".into());
+        return Err("Invalid save state (bad magic)".into());
     }
     let version = u32::from_le_bytes([data[4], data[5], data[6], data[7]]);
     if version != FORMAT_VERSION {
@@ -276,6 +276,22 @@ pub fn load_from_file(path: &Path, expected_cpu_type: u8) -> Result<SaveState, S
 
     bincode::deserialize(&decompressed)
         .map_err(|e| format!("Deserialize error: {}", e))
+}
+
+// ─── File I/O ───────────────────────────────────────────────────────────────
+
+/// Save state to file with header and deflate compression.
+pub fn save_to_file(state: &SaveState, cpu_type_byte: u8, path: &Path) -> Result<(), String> {
+    let out = save_to_bytes(state, cpu_type_byte)?;
+    std::fs::write(path, &out)
+        .map_err(|e| format!("Write error: {}", e))
+}
+
+/// Load state from file, verifying magic, version, and CPU type.
+pub fn load_from_file(path: &Path, expected_cpu_type: u8) -> Result<SaveState, String> {
+    let data = std::fs::read(path)
+        .map_err(|e| format!("Read error: {}", e))?;
+    load_from_bytes(&data, expected_cpu_type)
 }
 
 /// Derive save state file path from game file path.

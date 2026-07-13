@@ -21,9 +21,30 @@ export class AbEmu {
      */
     frame(): Uint8Array;
     /**
+     * Whether a GIF recording is in progress.
+     */
+    gifRecording(): boolean;
+    /**
+     * Begin capturing frames into an animated GIF. Frames are added on each
+     * [`AbEmu::run_frame`] until [`AbEmu::gif_stop`].
+     */
+    gifStart(): void;
+    /**
+     * Finish the recording and return the encoded GIF bytes (empty if none).
+     */
+    gifStop(): Uint8Array;
+    /**
      * RGB LED state as `[r, g, b]` (0–255).
      */
     ledRgb(): Uint8Array;
+    /**
+     * RX LED state (active).
+     */
+    ledRx(): boolean;
+    /**
+     * TX LED state (active).
+     */
+    ledTx(): boolean;
     /**
      * Restore EEPROM contents previously saved with [`AbEmu::save_eeprom`].
      */
@@ -38,6 +59,11 @@ export class AbEmu {
      * Load an explicit FX flash image (overrides any archive FX).
      */
     loadFx(data: Uint8Array): void;
+    /**
+     * Restore a state blob produced by [`AbEmu::save_state`]. Throws on a bad
+     * blob or a CPU-type mismatch with the loaded ROM.
+     */
+    loadState(data: Uint8Array): void;
     /**
      * Create a fresh emulator (ATmega32u4, no ROM). Installs a panic hook so
      * Rust panics surface in the browser console instead of an opaque trap.
@@ -61,6 +87,11 @@ export class AbEmu {
      */
     saveEeprom(): Uint8Array;
     /**
+     * Serialize the full emulator state to a compressed byte blob (for a quick
+     * slot in IndexedDB or a downloadable `.state` file).
+     */
+    saveState(): Uint8Array;
+    /**
      * Display height in pixels (64).
      */
     static screenHeight(): number;
@@ -82,15 +113,22 @@ export interface InitOutput {
     readonly abemu_cpuType: (a: number) => number;
     readonly abemu_eepromDirty: (a: number) => number;
     readonly abemu_frame: (a: number) => [number, number];
+    readonly abemu_gifRecording: (a: number) => number;
+    readonly abemu_gifStart: (a: number) => void;
+    readonly abemu_gifStop: (a: number) => [number, number];
     readonly abemu_ledRgb: (a: number) => [number, number];
+    readonly abemu_ledRx: (a: number) => number;
+    readonly abemu_ledTx: (a: number) => number;
     readonly abemu_loadEeprom: (a: number, b: number, c: number) => void;
     readonly abemu_loadFile: (a: number, b: number, c: number, d: number, e: number) => [number, number];
     readonly abemu_loadFx: (a: number, b: number, c: number) => void;
+    readonly abemu_loadState: (a: number, b: number, c: number) => [number, number];
     readonly abemu_new: () => number;
     readonly abemu_renderAudio: (a: number, b: number, c: number) => [number, number];
     readonly abemu_reset: (a: number) => void;
     readonly abemu_runFrame: (a: number) => void;
     readonly abemu_saveEeprom: (a: number) => [number, number];
+    readonly abemu_saveState: (a: number) => [number, number, number, number];
     readonly abemu_screenHeight: () => number;
     readonly abemu_screenWidth: () => number;
     readonly abemu_setButton: (a: number, b: number, c: number) => void;

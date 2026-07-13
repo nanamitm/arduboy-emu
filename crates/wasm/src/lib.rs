@@ -22,6 +22,8 @@ pub struct AbEmu {
     ard: Arduboy,
     /// Scratch buffer reused by [`AbEmu::render_audio`].
     audio_scratch: Vec<f32>,
+    /// Active GIF recording, if any.
+    gif: Option<arduboy_core::gif::GifEncoder>,
 }
 
 #[wasm_bindgen]
@@ -34,6 +36,7 @@ impl AbEmu {
         AbEmu {
             ard: Arduboy::new(),
             audio_scratch: Vec::new(),
+            gif: None,
         }
     }
 
@@ -76,6 +79,12 @@ impl AbEmu {
     #[wasm_bindgen(js_name = runFrame)]
     pub fn run_frame(&mut self) {
         self.ard.run_frame();
+        if self.gif.is_some() {
+            let indices = self.framebuffer_indices();
+            if let Some(enc) = self.gif.as_mut() {
+                enc.add_frame(&indices);
+            }
+        }
     }
 
     /// Set a button state. `btn`: 0=Up 1=Down 2=Left 3=Right 4=A 5=B.
@@ -144,6 +153,78 @@ impl AbEmu {
     #[wasm_bindgen(js_name = eepromDirty)]
     pub fn eeprom_dirty(&self) -> bool {
         self.ard.eeprom_dirty
+    }
+
+    /// TX LED state (active).
+    #[wasm_bindgen(js_name = ledTx)]
+    pub fn led_tx(&self) -> bool {
+        self.ard.led_tx
+    }
+
+    /// RX LED state (active).
+    #[wasm_bindgen(js_name = ledRx)]
+    pub fn led_rx(&self) -> bool {
+        self.ard.led_rx
+    }
+
+    // ── Save states ──────────────────────────────────────────────────────────
+
+    /// Serialize the full emulator state to a compressed byte blob (for a quick
+    /// slot in IndexedDB or a downloadable `.state` file).
+    #[wasm_bindgen(js_name = saveState)]
+    pub fn save_state(&self) -> Result<Vec<u8>, JsValue> {
+        let state = self.ard.save_full_state();
+        arduboy_core::savestate::save_to_bytes(&state, self.ard.cpu_type_byte())
+            .map_err(|e| JsValue::from_str(&e))
+    }
+
+    /// Restore a state blob produced by [`AbEmu::save_state`]. Throws on a bad
+    /// blob or a CPU-type mismatch with the loaded ROM.
+    #[wasm_bindgen(js_name = loadState)]
+    pub fn load_state(&mut self, data: &[u8]) -> Result<(), JsValue> {
+        let state = arduboy_core::savestate::load_from_bytes(data, self.ard.cpu_type_byte())
+            .map_err(|e| JsValue::from_str(&e))?;
+        self.ard.load_full_state(&state);
+        Ok(())
+    }
+
+    // ── GIF recording ────────────────────────────────────────────────────────
+
+    /// Begin capturing frames into an animated GIF. Frames are added on each
+    /// [`AbEmu::run_frame`] until [`AbEmu::gif_stop`].
+    #[wasm_bindgen(js_name = gifStart)]
+    pub fn gif_start(&mut self) {
+        // 3 cs/frame ≈ ~33 fps playback.
+        self.gif = Some(arduboy_core::gif::GifEncoder::new(
+            SCREEN_WIDTH as u16,
+            SCREEN_HEIGHT as u16,
+            3,
+        ));
+    }
+
+    /// Whether a GIF recording is in progress.
+    #[wasm_bindgen(js_name = gifRecording)]
+    pub fn gif_recording(&self) -> bool {
+        self.gif.is_some()
+    }
+
+    /// Finish the recording and return the encoded GIF bytes (empty if none).
+    #[wasm_bindgen(js_name = gifStop)]
+    pub fn gif_stop(&mut self) -> Vec<u8> {
+        match self.gif.take() {
+            Some(enc) => enc.finish(),
+            None => Vec::new(),
+        }
+    }
+
+    /// Current framebuffer as GIF palette indices (0 = black, 1 = white).
+    fn framebuffer_indices(&self) -> Vec<u8> {
+        let fb = self.ard.framebuffer_rgba();
+        let mut out = Vec::with_capacity(SCREEN_WIDTH * SCREEN_HEIGHT);
+        for i in 0..(SCREEN_WIDTH * SCREEN_HEIGHT) {
+            out.push(if fb[i * 4] >= 128 { 1 } else { 0 });
+        }
+        out
     }
 
     /// Display width in pixels (128).

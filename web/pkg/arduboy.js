@@ -42,6 +42,31 @@ export class AbEmu {
         return v1;
     }
     /**
+     * Whether a GIF recording is in progress.
+     * @returns {boolean}
+     */
+    gifRecording() {
+        const ret = wasm.abemu_gifRecording(this.__wbg_ptr);
+        return ret !== 0;
+    }
+    /**
+     * Begin capturing frames into an animated GIF. Frames are added on each
+     * [`AbEmu::run_frame`] until [`AbEmu::gif_stop`].
+     */
+    gifStart() {
+        wasm.abemu_gifStart(this.__wbg_ptr);
+    }
+    /**
+     * Finish the recording and return the encoded GIF bytes (empty if none).
+     * @returns {Uint8Array}
+     */
+    gifStop() {
+        const ret = wasm.abemu_gifStop(this.__wbg_ptr);
+        var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v1;
+    }
+    /**
      * RGB LED state as `[r, g, b]` (0–255).
      * @returns {Uint8Array}
      */
@@ -50,6 +75,22 @@ export class AbEmu {
         var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
         wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
         return v1;
+    }
+    /**
+     * RX LED state (active).
+     * @returns {boolean}
+     */
+    ledRx() {
+        const ret = wasm.abemu_ledRx(this.__wbg_ptr);
+        return ret !== 0;
+    }
+    /**
+     * TX LED state (active).
+     * @returns {boolean}
+     */
+    ledTx() {
+        const ret = wasm.abemu_ledTx(this.__wbg_ptr);
+        return ret !== 0;
     }
     /**
      * Restore EEPROM contents previously saved with [`AbEmu::save_eeprom`].
@@ -85,6 +126,19 @@ export class AbEmu {
         const ptr0 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
         const len0 = WASM_VECTOR_LEN;
         wasm.abemu_loadFx(this.__wbg_ptr, ptr0, len0);
+    }
+    /**
+     * Restore a state blob produced by [`AbEmu::save_state`]. Throws on a bad
+     * blob or a CPU-type mismatch with the loaded ROM.
+     * @param {Uint8Array} data
+     */
+    loadState(data) {
+        const ptr0 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.abemu_loadState(this.__wbg_ptr, ptr0, len0);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
     }
     /**
      * Create a fresh emulator (ATmega32u4, no ROM). Installs a panic hook so
@@ -127,6 +181,20 @@ export class AbEmu {
      */
     saveEeprom() {
         const ret = wasm.abemu_saveEeprom(this.__wbg_ptr);
+        var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v1;
+    }
+    /**
+     * Serialize the full emulator state to a compressed byte blob (for a quick
+     * slot in IndexedDB or a downloadable `.state` file).
+     * @returns {Uint8Array}
+     */
+    saveState() {
+        const ret = wasm.abemu_saveState(this.__wbg_ptr);
+        if (ret[3]) {
+            throw takeFromExternrefTable0(ret[2]);
+        }
         var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
         wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
         return v1;

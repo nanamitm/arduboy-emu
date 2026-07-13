@@ -15,15 +15,25 @@ small vanilla-JS frontend — a `<canvas>` for video, the Web Audio API
 No server-side code — it deploys as static files (Cloudflare Pages, GitHub
 Pages, Netlify, any static host).
 
-## Features (MVP)
+## Features
 
-- Load `.hex` / `.arduboy` ROMs via **Open ROM…** or **drag-and-drop**
-- Canvas rendering (128×64, crisp `pixelated` upscale), ~60 fps loop
-- Keyboard: **Arrows** = D-pad, **Z** = A, **X** = B
+- Load `.hex` / `.arduboy` ROMs via **Open ROM…**, **drag-and-drop**, or a
+  `?rom=<url>` deep link; optional **FX flash** `.bin` loading
+- Canvas rendering (128×64, crisp `pixelated` upscale), ~60 fps loop, with
+  **scale** presets (Fit / 2×–8×) and **fullscreen**
+- **Palette themes**: White / Green LCD / Amber
+- Input: keyboard (**Arrows** = D-pad, **Z** = A, **X** = B) and **on-screen
+  touch controls** (D-pad + A/B) for mobile
 - Stereo audio via a single-threaded AudioWorklet (no SharedArrayBuffer, so no
-  cross-origin isolation needed)
-- CPU auto-detection (ATmega32u4 / ATmega328P); Pause / Reset / Mute
-- `?rom=<url>` query param to deep-link a same-origin ROM
+  cross-origin isolation needed) with **volume** slider and **mute**
+- **Save states** (quick slot per ROM) and **EEPROM** auto-persistence, both
+  stored in **IndexedDB** and keyed by ROM name
+- **PNG screenshots** and **animated GIF** recording (downloaded to disk)
+- CPU auto-detection (ATmega32u4 / ATmega328P); live FPS + RGB/TX/RX LED readout
+- Pause / Reset (reset resumes if paused)
+
+Keyboard shortcuts: **R** reset · **P** pause · **M** mute · **S** screenshot ·
+**G** GIF · **F5**/**F9** save/load state.
 
 ## Build
 

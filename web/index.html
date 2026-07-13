@@ -2,80 +2,114 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>Arduboy Emulator — Web</title>
+<link rel="icon" href="./icon.png">
 <style>
   :root {
     --bg: #0b0d10;
     --panel: #161a21;
+    --panel-2: #1d232c;
+    --edge: #2b333d;
     --ink: #e6edf3;
     --muted: #8b98a5;
     --accent: #12b4c8;
     --accent-2: #eb5c5c;
+    --good: #4bd07b;
   }
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body {
-    margin: 0; height: 100%;
+    margin: 0; min-height: 100%;
     background: radial-gradient(1200px 600px at 50% -10%, #12212a 0%, var(--bg) 60%);
     color: var(--ink);
     font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   }
-  body { display: flex; flex-direction: column; align-items: center; padding: 24px 16px 40px; }
-  header { text-align: center; margin-bottom: 18px; }
-  h1 { font-size: 20px; margin: 0 0 4px; letter-spacing: .3px; }
-  header p { margin: 0; color: var(--muted); font-size: 13px; }
+  body { display: flex; flex-direction: column; align-items: center; padding: 20px 12px 48px; }
+  header { text-align: center; margin-bottom: 14px; }
+  h1 { font-size: 19px; margin: 0 0 2px; letter-spacing: .3px; }
+  header p { margin: 0; color: var(--muted); font-size: 12px; }
 
-  .screen-wrap {
-    position: relative;
-    padding: 14px;
-    background: var(--panel);
-    border: 1px solid #232a33;
-    border-radius: 16px;
+  /* Screen ------------------------------------------------------------------ */
+  #stage {
+    padding: 14px; background: var(--panel);
+    border: 1px solid #232a33; border-radius: 16px;
     box-shadow: 0 10px 40px rgba(0,0,0,.45);
   }
+  #stage:fullscreen { display: flex; align-items: center; justify-content: center;
+                      background: #000; border: 0; border-radius: 0; width: 100%; height: 100%; }
   canvas#screen {
     display: block;
-    width: min(90vw, 640px);
-    height: auto;
-    aspect-ratio: 2 / 1;
+    width: var(--screen-w, min(92vw, 640px));
+    height: auto; aspect-ratio: 2 / 1;
     image-rendering: pixelated;
-    background: #000;
-    border-radius: 6px;
-    outline: 1px solid #0a2a30;
+    background: #000; border-radius: 6px; outline: 1px solid #0a2a30;
   }
+  #stage:fullscreen canvas#screen { width: min(100vw, 200vh); border-radius: 0; }
 
-  .bar {
-    display: flex; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: center;
-    margin-top: 16px;
+  /* Touch controls ---------------------------------------------------------- */
+  #touch {
+    display: flex; justify-content: space-between; align-items: center;
+    width: min(92vw, 640px); margin-top: 14px; gap: 12px; user-select: none;
   }
-  button, label.file {
-    appearance: none; cursor: pointer;
-    background: #1d232c; color: var(--ink);
-    border: 1px solid #2b333d; border-radius: 8px;
-    padding: 8px 14px; font-size: 14px;
+  .dpad { display: grid; grid-template-columns: repeat(3, 52px); grid-template-rows: repeat(3, 52px); gap: 4px; }
+  .dpad button { grid-area: auto; }
+  .dpad .up    { grid-column: 2; grid-row: 1; }
+  .dpad .left  { grid-column: 1; grid-row: 2; }
+  .dpad .right { grid-column: 3; grid-row: 2; }
+  .dpad .down  { grid-column: 2; grid-row: 3; }
+  .ab { display: flex; align-items: center; gap: 16px; }
+  .pad {
+    appearance: none; border: 1px solid var(--edge); background: var(--panel-2);
+    color: var(--ink); font-size: 16px; font-weight: 600; border-radius: 12px;
+    width: 52px; height: 52px; display: flex; align-items: center; justify-content: center;
+    touch-action: none; cursor: pointer;
   }
-  button:hover, label.file:hover { border-color: var(--accent); }
+  .ab .pad { width: 64px; height: 64px; border-radius: 50%; font-size: 20px; }
+  .ab .a { background: #3a2020; border-color: #6e3535; }
+  .ab .b { background: #3a3320; border-color: #6e6035; }
+  .pad.active { border-color: var(--accent); background: #123038; }
+
+  /* Panel ------------------------------------------------------------------- */
+  .panel { width: min(92vw, 640px); margin-top: 18px; display: flex; flex-direction: column; gap: 10px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  button, label.file, select {
+    appearance: none; cursor: pointer; color: var(--ink);
+    background: var(--panel-2); border: 1px solid var(--edge); border-radius: 8px;
+    padding: 8px 12px; font-size: 13px;
+  }
+  button:hover, label.file:hover, select:hover { border-color: var(--accent); }
+  button:disabled { opacity: .5; cursor: default; border-color: var(--edge); }
   label.file input { display: none; }
+  label.ctl { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
+  input[type=range] { accent-color: var(--accent); }
+  #gif.recording { color: #fff; background: #5a2020; border-color: var(--accent-2); }
 
   .status {
-    margin-top: 12px; min-height: 20px;
-    color: var(--muted); font-size: 13px; text-align: center;
+    width: min(92vw, 640px); margin-top: 12px;
+    display: flex; gap: 14px; flex-wrap: wrap; align-items: center;
+    color: var(--muted); font-size: 12px;
   }
-  .hint { margin-top: 6px; color: var(--muted); font-size: 12px; text-align: center; }
-  kbd {
-    background: #0e1319; border: 1px solid #2b333d; border-bottom-width: 2px;
-    border-radius: 4px; padding: 1px 6px; font: 12px ui-monospace, monospace; color: var(--ink);
-  }
+  .status .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+                 background: #333; vertical-align: -1px; margin-right: 5px; border: 1px solid #000; }
+  #msg { flex: 1 1 220px; }
+  .hint { margin-top: 8px; color: var(--muted); font-size: 12px; text-align: center; }
+  kbd { background: #0e1319; border: 1px solid var(--edge); border-bottom-width: 2px;
+        border-radius: 4px; padding: 1px 6px; font: 12px ui-monospace, monospace; color: var(--ink); }
 
-  /* Drag-and-drop overlay */
   #drop {
-    position: fixed; inset: 0; display: none;
+    position: fixed; inset: 12px; display: none;
     align-items: center; justify-content: center;
     background: rgba(8,11,14,.82); backdrop-filter: blur(2px);
     color: var(--ink); font-size: 22px; z-index: 10;
-    border: 3px dashed var(--accent); border-radius: 12px; margin: 12px;
+    border: 3px dashed var(--accent); border-radius: 12px;
   }
   #drop.show { display: flex; }
+
+  @media (max-width: 480px) {
+    .dpad { grid-template-columns: repeat(3, 46px); grid-template-rows: repeat(3, 46px); }
+    .pad { width: 46px; height: 46px; }
+    .ab .pad { width: 58px; height: 58px; }
+  }
 </style>
 </head>
 <body>
@@ -84,24 +118,69 @@
     <p>ATmega32u4 / ATmega328P · WebAssembly build of arduboy-core</p>
   </header>
 
-  <div class="screen-wrap">
+  <div id="stage">
     <canvas id="screen" width="128" height="64" tabindex="0"></canvas>
   </div>
 
-  <div class="bar">
-    <label class="file">
-      Open ROM…
-      <input id="file" type="file" accept=".hex,.arduboy,.elf">
-    </label>
-    <button id="pause">Pause</button>
-    <button id="reset">Reset</button>
-    <button id="mute">Mute</button>
+  <div id="touch">
+    <div class="dpad">
+      <button class="pad up"    data-btn="0" aria-label="Up">▲</button>
+      <button class="pad left"  data-btn="2" aria-label="Left">◀</button>
+      <button class="pad right" data-btn="3" aria-label="Right">▶</button>
+      <button class="pad down"  data-btn="1" aria-label="Down">▼</button>
+    </div>
+    <div class="ab">
+      <button class="pad b" data-btn="5" aria-label="B">B</button>
+      <button class="pad a" data-btn="4" aria-label="A">A</button>
+    </div>
   </div>
 
-  <div class="status" id="status">Loading emulator…</div>
+  <div class="panel">
+    <div class="row">
+      <label class="file">Open ROM…<input id="file" type="file" accept=".hex,.arduboy,.elf"></label>
+      <label class="file">Load FX…<input id="fx" type="file" accept=".bin"></label>
+      <button id="pause" disabled>Pause</button>
+      <button id="reset" disabled>Reset</button>
+    </div>
+    <div class="row">
+      <button id="save"  disabled>Save State</button>
+      <button id="load"  disabled>Load State</button>
+      <button id="shot"  disabled>Screenshot</button>
+      <button id="gif"   disabled>● Rec GIF</button>
+      <button id="full">Fullscreen</button>
+    </div>
+    <div class="row">
+      <label class="ctl">Scale
+        <select id="scale">
+          <option value="fit">Fit</option>
+          <option value="2">2×</option><option value="3">3×</option>
+          <option value="4">4×</option><option value="5" selected>5×</option>
+          <option value="6">6×</option><option value="8">8×</option>
+        </select>
+      </label>
+      <label class="ctl">Palette
+        <select id="palette">
+          <option value="white">White</option>
+          <option value="green">Green LCD</option>
+          <option value="amber">Amber</option>
+        </select>
+      </label>
+      <label class="ctl">Volume
+        <input id="vol" type="range" min="0" max="100" value="60">
+      </label>
+      <button id="mute">Mute</button>
+    </div>
+  </div>
+
+  <div class="status">
+    <span id="msg">Loading emulator…</span>
+    <span id="leds"><span class="dot" id="rgb"></span>TX<span class="dot" id="tx"></span>RX<span class="dot" id="rx"></span></span>
+    <span id="cpu"></span>
+    <span id="fps"></span>
+  </div>
   <div class="hint">
-    <kbd>←↑↓→</kbd> D-pad &nbsp; <kbd>Z</kbd> A &nbsp; <kbd>X</kbd> B &nbsp;·&nbsp;
-    drop a <kbd>.hex</kbd> / <kbd>.arduboy</kbd> anywhere, or use “Open ROM…”.
+    <kbd>←↑↓→</kbd> D-pad · <kbd>Z</kbd> A · <kbd>X</kbd> B ·
+    <kbd>R</kbd> reset · <kbd>P</kbd> pause · <kbd>S</kbd> shot · <kbd>F5</kbd>/<kbd>F9</kbd> state
   </div>
 
   <div id="drop">Drop a ROM to load</div>
