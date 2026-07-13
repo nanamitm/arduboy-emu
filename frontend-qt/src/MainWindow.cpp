@@ -42,7 +42,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     setCentralWidget(m_display);
     connect(m_display, &DisplayWidget::buttonChanged, this, [this](int button, bool pressed) {
         if (button >= EmulatorCore::Up && button <= EmulatorCore::B)
-            setButtonSource(static_cast<EmulatorCore::Button>(button), pressed, true);
+            setButtonSource(static_cast<EmulatorCore::Button>(button), pressed, InputSource::Skin);
     });
 
     m_audio = new AudioOutput(this);
@@ -150,6 +150,7 @@ void MainWindow::buildMenus() {
 // ─── Emulation loop ─────────────────────────────────────────────────────────
 
 void MainWindow::tick() {
+    pollGamepad();
     if (m_paused || !m_core.isLoaded())
         return;
 
@@ -325,24 +326,35 @@ bool MainWindow::mapButton(int key, EmulatorCore::Button &out) const {
     }
 }
 
-void MainWindow::setButtonSource(EmulatorCore::Button button, bool pressed, bool skinSource) {
+void MainWindow::setButtonSource(EmulatorCore::Button button, bool pressed, InputSource sourceKind) {
     const int index = static_cast<int>(button);
     if (index < EmulatorCore::Up || index > EmulatorCore::B)
         return;
-    auto &source = skinSource ? m_skinButtons : m_keyboardButtons;
+    auto &source = sourceKind == InputSource::Keyboard ? m_keyboardButtons
+                   : sourceKind == InputSource::Skin ? m_skinButtons : m_gamepadButtons;
     if (source.at(index) == pressed)
         return;
-    const bool wasPressed = m_keyboardButtons.at(index) || m_skinButtons.at(index);
+    const bool wasPressed = m_keyboardButtons.at(index) || m_skinButtons.at(index) || m_gamepadButtons.at(index);
     source.at(index) = pressed;
-    const bool isPressed = m_keyboardButtons.at(index) || m_skinButtons.at(index);
+    const bool isPressed = m_keyboardButtons.at(index) || m_skinButtons.at(index) || m_gamepadButtons.at(index);
     if (wasPressed != isPressed)
         m_core.setButton(button, isPressed);
+}
+
+void MainWindow::pollGamepad() {
+    const GamepadInput::Snapshot state = m_gamepad.poll();
+    for (int i = EmulatorCore::Up; i <= EmulatorCore::B; ++i)
+        setButtonSource(static_cast<EmulatorCore::Button>(i), state.buttons.at(i), InputSource::Gamepad);
+    if (m_gamepadConnected != state.connected) {
+        m_gamepadConnected = state.connected;
+        updateStatus();
+    }
 }
 
 void MainWindow::keyPressEvent(QKeyEvent *event) {
     EmulatorCore::Button b;
     if (!event->isAutoRepeat() && mapButton(event->key(), b)) {
-        setButtonSource(b, true, false);
+        setButtonSource(b, true, InputSource::Keyboard);
         event->accept();
         return;
     }
@@ -357,7 +369,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
 void MainWindow::keyReleaseEvent(QKeyEvent *event) {
     EmulatorCore::Button b;
     if (!event->isAutoRepeat() && mapButton(event->key(), b)) {
-        setButtonSource(b, false, false);
+        setButtonSource(b, false, InputSource::Keyboard);
         event->accept();
         return;
     }
@@ -414,6 +426,7 @@ void MainWindow::updateStatus() {
     if (m_paused) flags << tr("PAUSED");
     if (m_audio->muted()) flags << tr("MUTE");
     if (m_core.gifRecording()) flags << tr("● REC");
+    if (m_gamepadConnected) flags << tr("GAMEPAD");
     m_stateLabel->setText(flags.join("  "));
 
     m_cpuLabel->setText(m_core.cpuType() == 1 ? "ATmega328P" : "ATmega32u4");

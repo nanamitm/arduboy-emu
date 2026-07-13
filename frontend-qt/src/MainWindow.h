@@ -7,6 +7,7 @@
 #include <QVector>
 
 #include "EmulatorCore.h"
+#include "GamepadInput.h"
 
 class QTimer;
 class QLabel;
@@ -50,10 +51,13 @@ private slots:
     void about();
 
 private:
+    enum class InputSource { Keyboard, Skin, Gamepad };
+
     void buildMenus();
     void updateStatus();
     void setPaused(bool paused);
-    void setButtonSource(EmulatorCore::Button button, bool pressed, bool skinSource);
+    void setButtonSource(EmulatorCore::Button button, bool pressed, InputSource source);
+    void pollGamepad();
     bool mapButton(int key, EmulatorCore::Button &out) const;
     // True if `path` looks like a ROM we can load (.hex / .arduboy / .elf).
     static bool isSupportedRom(const QString &path);
@@ -62,6 +66,7 @@ private:
     DisplayWidget *m_display = nullptr;
     AudioOutput *m_audio = nullptr;
     QTimer *m_timer = nullptr;
+    GamepadInput m_gamepad;
     QVector<float> m_audioBuf;
 
     QDockWidget *m_regDock = nullptr;
@@ -78,6 +83,8 @@ private:
     int m_scale = 4;
     std::array<bool, 6> m_keyboardButtons{};
     std::array<bool, 6> m_skinButtons{};
+    std::array<bool, 6> m_gamepadButtons{};
+    bool m_gamepadConnected = false;
 
     // FPS measurement
     QElapsedTimer m_fpsClock;

@@ -65,6 +65,7 @@ add_executable(arduboy-qt WIN32
     src/MainWindow.cpp
     src/EmulatorCore.cpp
     src/DisplayWidget.cpp
+    src/GamepadInput.cpp
     src/AudioOutput.cpp
     resources.qrc            # AUTORCC: window/taskbar icon inside the app
     ${APP_PLATFORM_SOURCES})

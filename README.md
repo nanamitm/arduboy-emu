@@ -63,7 +63,8 @@ The native Qt6 client lives in [`frontend-qt`](frontend-qt/). It provides the
 same emulator display inside selectable Arduboy, Microcard, Tama, Pip-Boy 3000,
 and Pip-Boy Mk IV skins. Select one from **View ▸ Skin**; the choice is restored
 at the next launch. Click and hold the displayed D-pad or A/B buttons to play,
-or use arrows, **Z**, and **X**. Build prerequisites and platform-specific
+or use arrows, **Z**, and **X**. On Windows, XInput gamepads are also supported
+(D-pad/left stick; A/X → A and B/Y → B). Build prerequisites and platform-specific
 instructions are in the [Qt client README](frontend-qt/README.md).
 
 ## Building
