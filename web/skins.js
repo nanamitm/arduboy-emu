@@ -20,6 +20,16 @@ export const SKINS = {
     description: 'Portrait handheld',
     className: 'skin-tama',
   },
+  pipboy: {
+    label: 'Pipboy 3000',
+    description: 'Retro terminal',
+    className: 'skin-pipboy',
+  },
+  pipboymkiv: {
+    label: 'Pipboy Mk IV',
+    description: 'Wrist terminal',
+    className: 'skin-pipboy-mkiv',
+  },
 };
 
 export const DEFAULT_SKIN = 'arduboy';
