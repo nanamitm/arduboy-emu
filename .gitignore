@@ -4,6 +4,7 @@
 
 # CMake build output (Qt frontend)
 /frontend-qt/build/
+/build-qt-msvc/
 
 # Cargo.lock is included for binary crates
 # Cargo.lock
