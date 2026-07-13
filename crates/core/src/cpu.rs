@@ -126,14 +126,21 @@ pub fn flags_logic(cpu: &mut Cpu, r: u8) {
 
 /// Skip the next instruction (for CPSE, SBRC, SBRS, SBIC, SBIS).
 ///
-/// Advances PC by 1 or 2 depending on whether the next instruction is 32-bit.
-pub fn skip_next(cpu: &mut Cpu, mem: &Memory) {
+/// Advances PC by 1 or 2 depending on whether the next instruction is 32-bit,
+/// and returns the cycle cost of the skip: 2 when a 1-word instruction is
+/// skipped, 3 when a 2-word instruction (JMP/CALL/LDS/STS) is skipped.
+pub fn skip_next(cpu: &mut Cpu, mem: &Memory) -> u8 {
     let nw = mem.read_program_word(cpu.pc as usize);
     let is_32 = (nw & 0xFE0E == 0x940C)
         || (nw & 0xFE0E == 0x940E)
         || (nw & 0xFE0F == 0x9000)
         || (nw & 0xFE0F == 0x9200);
     cpu.pc = cpu.pc.wrapping_add(if is_32 { 2 } else { 1 });
+    if is_32 {
+        3
+    } else {
+        2
+    }
 }
 
 // ---- Instruction execution on Arduboy ----
@@ -739,38 +746,33 @@ impl Arduboy {
             }
             Instruction::Cpse { d, r } => {
                 if self.mem.reg(d) == self.mem.reg(r) {
-                    skip_next(&mut self.cpu, &self.mem);
-                    return 2;
+                    return skip_next(&mut self.cpu, &self.mem);
                 }
                 1
             }
             Instruction::Sbrc { r, b } => {
                 if self.mem.reg(r) & (1 << b) == 0 {
-                    skip_next(&mut self.cpu, &self.mem);
-                    return 2;
+                    return skip_next(&mut self.cpu, &self.mem);
                 }
                 1
             }
             Instruction::Sbrs { r, b } => {
                 if self.mem.reg(r) & (1 << b) != 0 {
-                    skip_next(&mut self.cpu, &self.mem);
-                    return 2;
+                    return skip_next(&mut self.cpu, &self.mem);
                 }
                 1
             }
             Instruction::Sbic { a, b } => {
                 let v = self.read_data(a as u16);
                 if v & (1 << b) == 0 {
-                    skip_next(&mut self.cpu, &self.mem);
-                    return 2;
+                    return skip_next(&mut self.cpu, &self.mem);
                 }
                 1
             }
             Instruction::Sbis { a, b } => {
                 let v = self.read_data(a as u16);
                 if v & (1 << b) != 0 {
-                    skip_next(&mut self.cpu, &self.mem);
-                    return 2;
+                    return skip_next(&mut self.cpu, &self.mem);
                 }
                 1
             }
@@ -1070,6 +1072,45 @@ mod tests {
         let c = a.execute_inst(Instruction::Brbs { s: SREG_Z, k: 3 }, 1);
         assert_eq!(c, 1);
         assert_eq!(a.cpu.pc, 0x51);
+    }
+
+    #[test]
+    fn test_skip_not_taken() {
+        // SBRC on a set bit does not skip: 1 cycle, PC advances by the op size only.
+        let mut a = Arduboy::new();
+        a.cpu.pc = 0x100;
+        a.mem.set_reg(5, 0x01); // bit 0 set -> no skip
+        let c = a.execute_inst(Instruction::Sbrc { r: 5, b: 0 }, 1);
+        assert_eq!(c, 1);
+        assert_eq!(a.cpu.pc, 0x101);
+    }
+
+    #[test]
+    fn test_skip_one_word_instruction() {
+        // Skipping a 1-word instruction costs 2 cycles and advances PC by 2 words total.
+        let mut a = Arduboy::new();
+        a.cpu.pc = 0x100;
+        a.mem.set_reg(5, 0x00); // bit 0 clear -> SBRC skips
+                                // Word at 0x101 is a 1-word instruction (NOP).
+        a.mem.flash[0x101 * 2] = 0x00;
+        a.mem.flash[0x101 * 2 + 1] = 0x00;
+        let c = a.execute_inst(Instruction::Sbrc { r: 5, b: 0 }, 1);
+        assert_eq!(c, 2);
+        assert_eq!(a.cpu.pc, 0x102); // +1 (op size) +1 (skipped word)
+    }
+
+    #[test]
+    fn test_skip_two_word_instruction() {
+        // Skipping a 2-word instruction (JMP) costs 3 cycles and advances PC by 3 words.
+        let mut a = Arduboy::new();
+        a.cpu.pc = 0x100;
+        a.mem.set_reg(5, 0x00); // bit 0 clear -> SBRC skips
+                                // Word at 0x101 is the first word of a 2-word instruction (JMP = 0x940C).
+        a.mem.flash[0x101 * 2] = 0x0C;
+        a.mem.flash[0x101 * 2 + 1] = 0x94;
+        let c = a.execute_inst(Instruction::Sbrc { r: 5, b: 0 }, 1);
+        assert_eq!(c, 3);
+        assert_eq!(a.cpu.pc, 0x103); // +1 (op size) +2 (skipped 2-word instruction)
     }
 
     #[test]
