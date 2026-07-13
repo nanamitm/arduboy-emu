@@ -2,8 +2,19 @@
 //!
 //! Usage: cargo run --release --example rom_diag -- <file.hex> [frames]
 
-use arduboy_core::{Arduboy, Button};
+use arduboy_core::{detect_cpu_type, Arduboy, Button};
 use std::fs;
+
+/// Load a ROM into an emulator whose CPU is auto-detected from the vector table
+/// (Arduboy = ATmega32u4, Gamebuino Classic = ATmega328P).
+fn load_detected(hex: &str) -> Arduboy {
+    let mut probe = Arduboy::new();
+    probe.load_hex(hex).expect("load hex");
+    let cpu = detect_cpu_type(&probe.mem.flash);
+    let mut ard = Arduboy::new_with_cpu(cpu);
+    ard.load_hex(hex).expect("load hex");
+    ard
+}
 
 fn snapshot(ard: &Arduboy, blank: &[u32], label: &str) {
     let fb = ard.framebuffer_u32();
@@ -21,14 +32,12 @@ fn main() {
     let frames: u32 = args.next().and_then(|s| s.parse().ok()).unwrap_or(300);
 
     let hex = fs::read_to_string(&file).expect("read hex");
-    let blank = Arduboy::new().framebuffer_u32();
 
     // --catch-reset: single-step and report each time the PC re-enters the
     // interrupt-vector region (a reset/restart), with the instruction that got
     // us there. Reveals restart loops.
     if std::env::args().any(|a| a == "--catch-reset") {
-        let mut ard = Arduboy::new();
-        ard.load_hex(&hex).expect("load hex");
+        let mut ard = load_detected(&hex);
         println!("Catching resets in {file}");
         let mut hits = 0;
         let mut ring: std::collections::VecDeque<(u16, String)> = std::collections::VecDeque::new();
@@ -59,9 +68,12 @@ fn main() {
 
     let profile = std::env::args().any(|a| a == "--profile");
 
-    let mut ard = Arduboy::new();
-    let loaded = ard.load_hex(&hex).expect("load hex");
-    println!("Loaded {file} ({loaded} bytes), running {frames} frames");
+    let mut ard = load_detected(&hex);
+    let blank = Arduboy::new_with_cpu(ard.cpu_type).framebuffer_u32();
+    println!(
+        "Loaded {file} (cpu={:?}), running {frames} frames",
+        ard.cpu_type
+    );
 
     // Optional static disassembly: --dis <byte_addr> <count>
     let argv: Vec<String> = std::env::args().collect();

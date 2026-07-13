@@ -10,7 +10,7 @@
 //!
 //! `dir` is scanned recursively for `.hex` files. `frames` defaults to 120 (~2s).
 
-use arduboy_core::Arduboy;
+use arduboy_core::{detect_cpu_type, Arduboy, CpuType};
 use std::fs;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
@@ -49,7 +49,10 @@ fn main() {
     println!("Running {frames} frames each...\n");
 
     // A freshly reset device's framebuffer — anything drawn differs from this.
-    let blank_ref = Arduboy::new().framebuffer_u32();
+    // Kept per CPU type since 328P defaults to the PCD8544 LCD (Gamebuino).
+    let blank_32u4 = Arduboy::new_with_cpu(CpuType::Atmega32u4).framebuffer_u32();
+    let blank_328p = Arduboy::new_with_cpu(CpuType::Atmega328p).framebuffer_u32();
+    let mut cpu_counts = [0usize; 2]; // [32u4, 328p]
 
     let mut pass = 0usize;
     let mut load_fail: Vec<(String, String)> = Vec::new();
@@ -72,7 +75,17 @@ fn main() {
         };
 
         let result = catch_unwind(AssertUnwindSafe(|| {
-            let mut ard = Arduboy::new();
+            // Auto-detect the target from the vector table (Arduboy=32u4,
+            // Gamebuino Classic=328P) so both compilations run correctly.
+            let mut probe = Arduboy::new();
+            probe.load_hex(&hex)?;
+            let cpu = detect_cpu_type(&probe.mem.flash);
+            let blank = if cpu == CpuType::Atmega328p {
+                &blank_328p
+            } else {
+                &blank_32u4
+            };
+            let mut ard = Arduboy::new_with_cpu(cpu);
             ard.load_hex(&hex)?;
             for _ in 0..frames {
                 ard.run_frame();
@@ -80,14 +93,15 @@ fn main() {
             let fb = ard.framebuffer_u32();
             // "Rendered" means the display differs from a freshly reset device,
             // so a uniform full-screen fill still counts as drawn.
-            let rendered = fb != blank_ref;
-            Ok::<(u64, bool), String>((ard.unknown_ops, rendered))
+            let rendered = fb != *blank;
+            Ok::<(u64, bool, CpuType), String>((ard.unknown_ops, rendered, cpu))
         }));
 
         match result {
             Err(_) => panicked.push(name),
             Ok(Err(e)) => load_fail.push((name, e)),
-            Ok(Ok((unk, rendered))) => {
+            Ok(Ok((unk, rendered, cpu))) => {
+                cpu_counts[(cpu == CpuType::Atmega328p) as usize] += 1;
                 let mut ok = true;
                 if unk > 0 {
                     unknown.push((name.clone(), unk));
@@ -136,5 +150,9 @@ fn main() {
         load_fail.len(),
         unknown.len(),
         blank.len(),
+    );
+    println!(
+        "Detected CPU: {} × ATmega32u4, {} × ATmega328P",
+        cpu_counts[0], cpu_counts[1]
     );
 }
