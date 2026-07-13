@@ -258,7 +258,8 @@ impl Arduboy {
                 let n = (res >> 7) & 1;
                 let z = if res == 0 { 1u8 } else { 0 };
                 let s = n;
-                self.cpu.sreg = (self.cpu.sreg & 0b1100_0000) | (s << 4) | (n << 2) | (z << 1) | 1;
+                // COM leaves I, T and H unchanged; sets S/N/Z, clears V, sets C.
+                self.cpu.sreg = (self.cpu.sreg & 0b1110_0000) | (s << 4) | (n << 2) | (z << 1) | 1;
                 sync_sreg(&self.cpu, &mut self.mem);
                 1
             }
@@ -327,21 +328,24 @@ impl Arduboy {
                 2
             }
             Instruction::Fmul { d, r } => {
-                let res = ((self.mem.reg(d) as u16) * (self.mem.reg(r) as u16)) << 1;
+                // C is bit 15 of the product *before* the left shift, so keep the
+                // full product width and read the carry from it (not from res).
+                let prod = (self.mem.reg(d) as u32) * (self.mem.reg(r) as u32);
+                let res = ((prod << 1) & 0xFFFF) as u16;
                 self.mem.set_reg(0, res as u8);
                 self.mem.set_reg(1, (res >> 8) as u8);
-                let c = if res & 0x8000 != 0 { 1u8 } else { 0 };
-                let z = if (res & 0xFFFF) == 0 { 1u8 } else { 0 };
+                let c = ((prod >> 15) & 1) as u8;
+                let z = if res == 0 { 1u8 } else { 0 };
                 self.cpu.sreg = (self.cpu.sreg & 0b1111_1100) | (z << 1) | c;
                 sync_sreg(&self.cpu, &mut self.mem);
                 2
             }
             Instruction::Fmuls { d, r } => {
-                let res =
-                    (((self.mem.reg(d) as i8 as i16) * (self.mem.reg(r) as i8 as i16)) << 1) as u16;
+                let prod = (self.mem.reg(d) as i8 as i32) * (self.mem.reg(r) as i8 as i32);
+                let res = ((prod << 1) & 0xFFFF) as u16;
                 self.mem.set_reg(0, res as u8);
                 self.mem.set_reg(1, (res >> 8) as u8);
-                let c = if res & 0x8000 != 0 { 1u8 } else { 0 };
+                let c = ((prod >> 15) & 1) as u8;
                 let z = if res == 0 { 1u8 } else { 0 };
                 self.cpu.sreg = (self.cpu.sreg & 0b1111_1100) | (z << 1) | c;
                 sync_sreg(&self.cpu, &mut self.mem);
@@ -349,10 +353,11 @@ impl Arduboy {
             }
             Instruction::Fmulsu { d, r } => {
                 // Rd signed × Rr unsigned, result << 1
-                let res = (((self.mem.reg(d) as i8 as i16) * (self.mem.reg(r) as i16)) << 1) as u16;
+                let prod = (self.mem.reg(d) as i8 as i32) * (self.mem.reg(r) as i32);
+                let res = ((prod << 1) & 0xFFFF) as u16;
                 self.mem.set_reg(0, res as u8);
                 self.mem.set_reg(1, (res >> 8) as u8);
-                let c = if res & 0x8000 != 0 { 1u8 } else { 0 };
+                let c = ((prod >> 15) & 1) as u8;
                 let z = if res == 0 { 1u8 } else { 0 };
                 self.cpu.sreg = (self.cpu.sreg & 0b1111_1100) | (z << 1) | c;
                 sync_sreg(&self.cpu, &mut self.mem);
@@ -1034,6 +1039,37 @@ mod tests {
         a.execute_inst(Instruction::Sub { d: 0, r: 1 }, 1);
         assert_eq!(a.mem.reg(0), 10);
         assert!(!a.cpu.flag(SREG_C));
+    }
+
+    #[test]
+    fn test_com_preserves_h() {
+        let mut a = Arduboy::new();
+        a.mem.set_reg(5, 0x0F);
+        a.cpu.set_flag(SREG_H, true); // H set before COM
+        a.execute_inst(Instruction::Com { d: 5 }, 1);
+        assert_eq!(a.mem.reg(5), 0xF0);
+        assert!(a.cpu.flag(SREG_H)); // COM must leave H unchanged
+        assert!(a.cpu.flag(SREG_C)); // COM always sets C
+        assert!(!a.cpu.flag(SREG_V)); // COM clears V
+        assert!(a.cpu.flag(SREG_N)); // 0xF0 is negative
+    }
+
+    #[test]
+    fn test_fmul_carry_is_preshift_bit15() {
+        let mut a = Arduboy::new();
+        // 0x80 * 0x80 = 0x4000; result <<1 = 0x8000, carry (pre-shift bit15) = 0.
+        a.mem.set_reg(16, 0x80);
+        a.mem.set_reg(17, 0x80);
+        a.execute_inst(Instruction::Fmul { d: 16, r: 17 }, 1);
+        assert_eq!(a.mem.reg(1), 0x80);
+        assert_eq!(a.mem.reg(0), 0x00);
+        assert!(!a.cpu.flag(SREG_C));
+
+        // 0xFF * 0xFF = 0xFE01; pre-shift bit15 = 1.
+        a.mem.set_reg(16, 0xFF);
+        a.mem.set_reg(17, 0xFF);
+        a.execute_inst(Instruction::Fmul { d: 16, r: 17 }, 1);
+        assert!(a.cpu.flag(SREG_C));
     }
 
     #[test]
