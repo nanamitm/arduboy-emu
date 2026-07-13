@@ -184,8 +184,12 @@ void MainWindow::reloadRom() {
 }
 
 void MainWindow::reset() {
-    if (m_core.isLoaded())
-        m_core.reset();
+    if (!m_core.isLoaded())
+        return;
+    m_core.reset();
+    // Resetting while paused resumes emulation, so the fresh boot is visible.
+    if (m_paused)
+        setPaused(false);
 }
 
 void MainWindow::takeScreenshot() {

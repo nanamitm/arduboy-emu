@@ -154,7 +154,16 @@ async function main() {
     if (!paused) await ensureAudio();
   });
 
-  $('reset').addEventListener('click', () => { if (running) emu.reset(); });
+  $('reset').addEventListener('click', async () => {
+    if (!running) return;
+    emu.reset();
+    // Resetting while paused resumes emulation so the fresh boot is visible.
+    if (paused) {
+      paused = false;
+      $('pause').textContent = 'Pause';
+      await ensureAudio();
+    }
+  });
 
   $('mute').addEventListener('click', () => {
     muted = !muted;
