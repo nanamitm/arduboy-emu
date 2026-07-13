@@ -26,24 +26,24 @@ struct SkinSpec {
 SkinSpec specFor(DisplayWidget::Skin skin) {
     switch (skin) {
     case DisplayWidget::Skin::Microcard:
-        return {{430, 318}, {95, 57, 241, 120}, {17, 200}, {330, 207}, 28, 44,
+        return {{430, 318}, {95, 57, 241, 120}, {17, 200}, {320, 207}, 28, 44,
                 QColor("#467a86"), QColor("#102832"), QColor("#70aeb6"), QColor("#071014"),
                 QStringLiteral("MICROCARD")};
     case DisplayWidget::Skin::Tama:
-        return {{300, 357}, {63, 107, 174, 87}, {24, 221}, {208, 236}, 31, 42,
+        return {{300, 357}, {63, 107, 174, 87}, {24, 221}, {190, 236}, 31, 42,
                 QColor("#fcf6ce"), QColor("#b87a53"), QColor("#fff0ae"), QColor("#5d4a37"),
                 QStringLiteral("TAMA")};
     case DisplayWidget::Skin::Pipboy:
-        return {{540, 367}, {178, 88, 221, 110}, {43, 230}, {432, 242}, 34, 48,
+        return {{540, 367}, {178, 88, 221, 110}, {43, 230}, {416, 242}, 34, 48,
                 QColor("#5c6656"), QColor("#11170f"), QColor("#849174"), QColor("#10180c"),
                 QStringLiteral("PIP-BOY 3000"), true};
     case DisplayWidget::Skin::PipboyMkIv:
-        return {{480, 364}, {106, 95, 168, 84}, {230, 204}, {370, 240}, 31, 46,
+        return {{480, 364}, {106, 95, 168, 84}, {230, 204}, {352, 240}, 31, 46,
                 QColor("#757a71"), QColor("#151914"), QColor("#a7aa9b"), QColor("#12170f"),
                 QStringLiteral("PIP-BOY 3000 MARK IV"), true};
     case DisplayWidget::Skin::Arduboy:
     default:
-        return {{320, 512}, {32, 92, 256, 128}, {22, 270}, {220, 292}, 32, 46,
+        return {{320, 512}, {32, 92, 256, 128}, {22, 270}, {204, 292}, 32, 46,
                 QColor("#343c47"), QColor("#11161c"), QColor("#586371"), QColor("#0a0d10"),
                 QStringLiteral("ARDUBOY")};
     }
