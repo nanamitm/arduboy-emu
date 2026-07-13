@@ -145,6 +145,12 @@ pub const SREG_I: u8 = 7;
 pub const SREG_ADDR: u16 = 0x5F;
 pub const SPH_ADDR: u16 = 0x5E;
 pub const SPL_ADDR: u16 = 0x5D;
+/// Watchdog control register (same address on ATmega32u4 and ATmega328P).
+pub const WDTCSR_ADDR: u16 = 0x60;
+/// MCU Status Register (same address on ATmega32u4 and ATmega328P).
+pub const MCUSR_ADDR: u16 = 0x54;
+/// Watchdog Reset Flag bit within MCUSR.
+pub const WDRF_BIT: u8 = 3;
 
 /// Arduboy button identifiers
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -168,6 +174,7 @@ pub struct Arduboy {
     pub timer4: peripherals::Timer4,
     /// Timer2 (ATmega328P only, 8-bit async)
     pub timer2: peripherals::Timer8,
+    pub watchdog: peripherals::Watchdog,
     pub spi: peripherals::Spi,
     pub pll: peripherals::Pll,
     pub adc: peripherals::Adc,
@@ -194,6 +201,9 @@ pub struct Arduboy {
     pub pcd8544: pcd8544::Pcd8544,
     /// Frame counter for debug
     frame_count: u32,
+    /// Set when a watchdog reset restarts the MCU mid-frame, so `run_frame`
+    /// can stop cleanly (the cycle counter has jumped back to 0).
+    did_reset: bool,
     /// Track previous PD1 state for FX CS edge detection
     fx_cs_prev: bool,
     /// PCD8544 CS bit position in PORTC (0xFF = not yet detected, ATmega328P only)
@@ -397,6 +407,14 @@ impl Arduboy {
             timer3: peripherals::Timer16::new(timer3_addrs),
             timer4: peripherals::Timer4::new(),
             timer2: peripherals::Timer8::new(timer2_addrs),
+            watchdog: peripherals::Watchdog::new(
+                if cpu_type == CpuType::Atmega328p {
+                    peripherals::INT_328P_WDT
+                } else {
+                    peripherals::INT_WDT
+                },
+                WDTCSR_ADDR,
+            ),
             spi: peripherals::Spi::new(),
             pll: peripherals::Pll::new(),
             adc: peripherals::Adc::new(),
@@ -418,6 +436,7 @@ impl Arduboy {
             },
             pcd8544: pcd8544::Pcd8544::new(),
             frame_count: 0,
+            did_reset: false,
             fx_cs_prev: true,
             // Default Gamebuino Classic pin mapping: DC=PC2(A2), CS=PC1(A1)
             // Auto-detection in flush_spi may override these.
@@ -550,6 +569,7 @@ impl Arduboy {
         self.timer3.reset();
         self.timer4.reset();
         self.timer2.reset();
+        self.watchdog.reset();
         self.spi.reset();
         self.pll.reset();
         self.adc.reset();
@@ -669,6 +689,7 @@ impl Arduboy {
         let cycles = (CLOCK_HZ as u64 * 135) / 10000; // 216000
         let end_tick = self.cpu.tick + cycles;
         let mut last_update = self.cpu.tick;
+        self.did_reset = false;
 
         // Begin sample-accurate audio recording for this frame
         self.audio_buf.begin_frame(self.cpu.tick);
@@ -716,6 +737,12 @@ impl Arduboy {
                 last_update = self.cpu.tick;
                 self.flush_spi();
                 self.update_peripherals();
+                // A watchdog reset restarted the MCU (tick jumped back to 0);
+                // end the frame here so the stale local counters aren't reused.
+                if self.did_reset {
+                    self.flush_spi();
+                    return;
+                }
             }
         }
         self.update_peripherals();
@@ -1283,6 +1310,12 @@ impl Arduboy {
             _ => {}
         }
 
+        // Watchdog control register
+        if addr == WDTCSR_ADDR {
+            self.watchdog
+                .write_wdtcsr(value, self.cpu.tick, &mut self.mem.data);
+            return;
+        }
         // Timer0 writes
         if self.timer0.write(addr, value, old, &mut self.mem.data) {
             return;
@@ -1774,6 +1807,23 @@ impl Arduboy {
                 return;
             }
         }
+
+        // Watchdog
+        match self.watchdog.update(tick, &mut self.mem.data) {
+            peripherals::WatchdogEvent::Reset => {
+                // Watchdog system reset: restart the MCU and latch WDRF so the
+                // sketch can tell the reset came from the watchdog.
+                self.reset();
+                self.mem.data[MCUSR_ADDR as usize] |= 1 << WDRF_BIT;
+                self.did_reset = true;
+                return;
+            }
+            peripherals::WatchdogEvent::None => {}
+        }
+        if let Some(vec_addr) = self.watchdog.take_interrupt(ie) {
+            self.cpu.sleeping = false;
+            self.do_interrupt(vec_addr);
+        }
     }
 
     /// Execute an interrupt: push PC, jump to vector
@@ -2171,6 +2221,29 @@ mod tests {
             flash[addr + 1] = 0xEF; // LDI r16, 0xFF
         }
         assert_eq!(detect_cpu_type(&flash), CpuType::Atmega328p);
+    }
+
+    #[test]
+    fn test_watchdog_system_reset() {
+        let mut ard = Arduboy::new();
+        // Sentinel in RAM and a non-zero PC to prove a real reset happened.
+        let marker = 0x200usize;
+        ard.mem.data[marker] = 0xAB;
+        ard.cpu.pc = 0x40;
+        // wdt_enable(WDTO_15MS): WDCE|WDE arm, then WDE with WDP=0 (~256k cycles).
+        ard.write_data(WDTCSR_ADDR, (1 << 4) | (1 << 3));
+        ard.write_data(WDTCSR_ADDR, 1 << 3);
+        // Flash is all-NOP, so the dog is never pet. Two frames (~432k cycles)
+        // comfortably exceed the ~256k-cycle timeout.
+        ard.run_frame();
+        ard.run_frame();
+        // A watchdog system reset clears RAM, latches WDRF, and restarts at 0.
+        assert_eq!(ard.mem.data[marker], 0x00);
+        assert_eq!(
+            ard.mem.data[MCUSR_ADDR as usize] & (1 << WDRF_BIT),
+            1 << WDRF_BIT
+        );
+        assert_eq!(ard.cpu.pc, 0);
     }
 
     #[test]

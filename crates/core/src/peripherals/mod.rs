@@ -19,6 +19,7 @@ mod spi;
 mod timer16;
 mod timer4;
 mod timer8;
+mod watchdog;
 
 pub use adc::Adc;
 pub use eeprom::EepromCtrl;
@@ -28,6 +29,7 @@ pub use spi::Spi;
 pub use timer16::{Timer16, Timer16Addrs};
 pub use timer4::Timer4;
 pub use timer8::{Timer8, Timer8Addrs};
+pub use watchdog::{Watchdog, WatchdogEvent};
 
 // ─── ATmega32u4 interrupt vector addresses (word addresses) ────────────────
 
@@ -44,6 +46,7 @@ pub const INT_TIMER3_COMPC: u16 = 0x0044;
 pub const INT_TIMER3_OVF: u16 = 0x0046;
 pub const INT_SPI: u16 = 0x0030;
 pub const INT_ADC: u16 = 0x003A;
+pub const INT_WDT: u16 = 0x0018;
 
 // Timer4 (32u4 only)
 pub const INT_TIMER4_OVF: u16 = 0x0048;
@@ -67,3 +70,4 @@ pub const INT_328P_USART_RX: u16 = 0x0024;
 pub const INT_328P_USART_UDRE: u16 = 0x0026;
 pub const INT_328P_USART_TX: u16 = 0x0028;
 pub const INT_328P_ADC: u16 = 0x002A;
+pub const INT_328P_WDT: u16 = 0x000C;

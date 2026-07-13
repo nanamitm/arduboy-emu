@@ -952,7 +952,11 @@ impl Arduboy {
                 self.cpu.sleeping = true;
                 1
             }
-            Instruction::Wdr => 1,
+            Instruction::Wdr => {
+                // Watchdog reset — restart the watchdog countdown.
+                self.watchdog.reset_timer(self.cpu.tick);
+                1
+            }
             Instruction::Break => {
                 // Debug break — trigger breakpoint_hit
                 self.breakpoint_hit = true;
