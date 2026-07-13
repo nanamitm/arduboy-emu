@@ -23,6 +23,8 @@ let volume = 0.6;
 let muted = false;
 let palette = 'white';
 let skin = DEFAULT_SKIN;
+const inputSources = Array.from({ length: 6 }, () => new Set());
+const activeGamepads = new Set();
 
 // ── Palette themes (lit / unlit RGB) ─────────────────────────────────────────
 const PALETTES = {
@@ -72,6 +74,7 @@ let lastTime = 0;
 let acc = 0;
 
 function loop(now) {
+  pollGamepads();
   if (!running || paused) { lastTime = now; return; }
   acc += now - lastTime;
   lastTime = now;
@@ -89,6 +92,55 @@ function loop(now) {
     stepped = true;
   }
   if (stepped) { draw(); updateLeds(); }
+}
+
+// ── Input aggregation / gamepads ───────────────────────────────────────────
+// A button can be held by the keyboard, touch UI, and one or more gamepads at
+// the same time.  Release it only after every source releases it.
+function setInput(button, source, pressed) {
+  const sources = inputSources[button];
+  const wasPressed = sources.size > 0;
+  if (pressed) sources.add(source);
+  else sources.delete(source);
+  const isPressed = sources.size > 0;
+  if (wasPressed !== isPressed && emu) emu.setButton(button, isPressed);
+  const pad = document.querySelector(`.pad[data-btn="${button}"]`);
+  if (pad) pad.classList.toggle('active', isPressed);
+}
+
+function gamepadButton(gamepad, index) {
+  const value = gamepad.buttons[index];
+  return !!value && (value.pressed || value.value >= 0.5);
+}
+
+function pollGamepads() {
+  if (!navigator.getGamepads) return;
+  const pads = [...navigator.getGamepads()].filter(Boolean);
+  const seen = new Set();
+  for (const gamepad of pads) {
+    const source = `gamepad-${gamepad.index}`;
+    seen.add(source);
+    const x = gamepad.axes[0] || 0;
+    const y = gamepad.axes[1] || 0;
+    const pressed = [
+      gamepadButton(gamepad, 12) || y <= -0.5,
+      gamepadButton(gamepad, 13) || y >= 0.5,
+      gamepadButton(gamepad, 14) || x <= -0.5,
+      gamepadButton(gamepad, 15) || x >= 0.5,
+      gamepadButton(gamepad, 0) || gamepadButton(gamepad, 2),
+      gamepadButton(gamepad, 1) || gamepadButton(gamepad, 3),
+    ];
+    pressed.forEach((on, button) => setInput(button, source, on));
+  }
+  for (const source of activeGamepads) {
+    if (seen.has(source)) continue;
+    for (let button = 0; button < inputSources.length; button++) setInput(button, source, false);
+  }
+  activeGamepads.clear();
+  seen.forEach((source) => activeGamepads.add(source));
+  $('gamepad').textContent = pads.length
+    ? `Gamepad: ${pads.map((pad) => pad.id || `#${pad.index}`).join(', ')}`
+    : 'Gamepad: none';
 }
 
 // ── IndexedDB persistence ─────────────────────────────────────────────────────
@@ -295,7 +347,7 @@ function onKeyDown(e) {
   if (btn !== undefined) {
     e.preventDefault();
     ensureAudio();
-    if (!e.repeat) emu.setButton(btn, true);
+    if (!e.repeat) setInput(btn, `key-${e.code}`, true);
     return;
   }
   const shortcuts = {
@@ -306,7 +358,7 @@ function onKeyDown(e) {
 }
 function onKeyUp(e) {
   const btn = KEY_MAP[e.code];
-  if (btn !== undefined) { e.preventDefault(); emu.setButton(btn, false); }
+  if (btn !== undefined) { e.preventDefault(); setInput(btn, `key-${e.code}`, false); }
 }
 
 function wireTouch() {
@@ -314,8 +366,7 @@ function wireTouch() {
     const btn = Number(pad.dataset.btn);
     const press = (on) => {
       if (!emu) return;
-      pad.classList.toggle('active', on);
-      emu.setButton(btn, on);
+      setInput(btn, `touch-${btn}`, on);
     };
     pad.addEventListener('pointerdown', (e) => {
       e.preventDefault(); pad.setPointerCapture?.(e.pointerId); ensureAudio(); press(true);
@@ -352,6 +403,8 @@ async function main() {
 
   window.addEventListener('keydown', onKeyDown);
   window.addEventListener('keyup', onKeyUp);
+  window.addEventListener('gamepadconnected', pollGamepads);
+  window.addEventListener('gamepaddisconnected', pollGamepads);
   wireTouch();
 
   $('file').addEventListener('change', (e) => { if (e.target.files[0]) loadRom(e.target.files[0]); });
