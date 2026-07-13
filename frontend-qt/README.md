@@ -18,6 +18,7 @@ and forwards input. All state lives in the Rust core.
 
 - Load `.hex`, `.arduboy`, and `.elf` ROMs (companion FX `.bin` and `.eep`
   EEPROM files auto-detected), with CPU auto-detection (ATmega32u4 / ATmega328P)
+- **Drag & drop** a ROM file onto the window to load it (or **File ▸ Open ROM…**)
 - Scaled display (1×–6×), aspect-correct letterboxing, nearest / smooth scaling,
   fullscreen (F11)
 - Keyboard input: **Arrows** = D-pad, **Z** = A, **X** = B

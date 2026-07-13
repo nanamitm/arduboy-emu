@@ -27,6 +27,8 @@ protected:
     void keyPressEvent(QKeyEvent *event) override;
     void keyReleaseEvent(QKeyEvent *event) override;
     void closeEvent(QCloseEvent *event) override;
+    void dragEnterEvent(QDragEnterEvent *event) override;
+    void dropEvent(QDropEvent *event) override;
 
 private slots:
     void tick();          // one emulated frame
@@ -50,6 +52,8 @@ private:
     void updateStatus();
     void setPaused(bool paused);
     bool mapButton(int key, EmulatorCore::Button &out) const;
+    // True if `path` looks like a ROM we can load (.hex / .arduboy / .elf).
+    static bool isSupportedRom(const QString &path);
 
     EmulatorCore m_core;
     DisplayWidget *m_display = nullptr;

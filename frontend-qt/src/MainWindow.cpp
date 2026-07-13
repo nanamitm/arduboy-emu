@@ -7,6 +7,10 @@
 #include <QApplication>
 #include <QCloseEvent>
 #include <QDateTime>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QMimeData>
+#include <QUrl>
 #include <QDockWidget>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -26,6 +30,7 @@ constexpr int kFrameIntervalMs = 16;  // ~60 fps
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     setWindowTitle("Arduboy Emulator (Qt)");
+    setAcceptDrops(true); // drag a .hex/.arduboy/.elf onto the window to load it
 
     m_display = new DisplayWidget(this);
     setCentralWidget(m_display);
@@ -312,6 +317,33 @@ void MainWindow::keyReleaseEvent(QKeyEvent *event) {
     QMainWindow::keyReleaseEvent(event);
 }
 
+bool MainWindow::isSupportedRom(const QString &path) {
+    const QString p = path.toLower();
+    return p.endsWith(".hex") || p.endsWith(".arduboy") || p.endsWith(".elf");
+}
+
+void MainWindow::dragEnterEvent(QDragEnterEvent *event) {
+    if (!event->mimeData()->hasUrls())
+        return;
+    for (const QUrl &url : event->mimeData()->urls()) {
+        if (isSupportedRom(url.toLocalFile())) {
+            event->acceptProposedAction(); // show the "copy" cursor
+            return;
+        }
+    }
+}
+
+void MainWindow::dropEvent(QDropEvent *event) {
+    for (const QUrl &url : event->mimeData()->urls()) {
+        const QString path = url.toLocalFile();
+        if (isSupportedRom(path)) {
+            openPath(path); // loads the first supported ROM in the drop
+            event->acceptProposedAction();
+            return;
+        }
+    }
+}
+
 void MainWindow::closeEvent(QCloseEvent *event) {
     if (m_core.isLoaded() && m_core.gifRecording())
         m_core.gifStop();
@@ -324,7 +356,7 @@ void MainWindow::closeEvent(QCloseEvent *event) {
 
 void MainWindow::updateStatus() {
     if (!m_core.isLoaded()) {
-        m_stateLabel->setText(tr("No ROM loaded — File ▸ Open ROM"));
+        m_stateLabel->setText(tr("No ROM loaded — File ▸ Open ROM, or drag a .hex here"));
         m_cpuLabel->clear();
         m_ledLabel->clear();
         m_fpsLabel->clear();
