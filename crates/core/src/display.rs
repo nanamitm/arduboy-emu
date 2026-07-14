@@ -11,6 +11,7 @@ const FB_SIZE: usize = SCREEN_WIDTH * SCREEN_HEIGHT * 4; // RGBA
 
 /// SSD1306 128x64 monochrome OLED display controller
 pub struct Ssd1306 {
+    /// Rendered 128×64 image as RGBA bytes (row-major, 4 bytes per pixel).
     pub framebuffer: [u8; FB_SIZE],
     /// Current column pointer
     col: u8,
@@ -51,6 +52,7 @@ enum CmdState {
 }
 
 impl Ssd1306 {
+    /// Create a display controller with a cleared framebuffer and default state.
     pub fn new() -> Self {
         Ssd1306 {
             framebuffer: [0; FB_SIZE],

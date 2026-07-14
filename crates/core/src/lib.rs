@@ -35,6 +35,27 @@
 //!
 //! Stereo output: Speaker 1 (PC6 on 32u4, PD3 on 328P) → left channel,
 //! Speaker 2 (PB5) → right channel.
+//!
+//! ## Example
+//!
+//! ```
+//! use arduboy_core::{Arduboy, Button};
+//!
+//! let mut ard = Arduboy::new(); // ATmega32u4 target
+//! // Load an Arduboy program (Intel HEX text). Here, just the EOF record.
+//! ard.load_hex(":00000001FF\n").unwrap();
+//!
+//! ard.set_button(Button::A, true); // press A
+//! ard.run_frame(); // advance one ~16.7 ms frame
+//!
+//! // Read the 128×64 display as 0x00RRGGBB pixels.
+//! let framebuffer = ard.framebuffer_u32();
+//! assert_eq!(framebuffer.len(), 128 * 64);
+//! ```
+//!
+//! For the ATmega328P (Gamebuino Classic), construct with
+//! [`Arduboy::new_with_cpu`] or let [`detect_cpu_type`] pick the target from a
+//! program's vector table.
 
 pub mod arduboy_file;
 pub mod audio_buffer;
@@ -131,19 +152,30 @@ pub fn detect_cpu_type(flash: &[u8]) -> CpuType {
     }
 }
 
-// SREG bit positions
+// SREG (status register) bit positions.
+/// Carry flag bit.
 pub const SREG_C: u8 = 0;
+/// Zero flag bit.
 pub const SREG_Z: u8 = 1;
+/// Negative flag bit.
 pub const SREG_N: u8 = 2;
+/// Two's-complement overflow flag bit.
 pub const SREG_V: u8 = 3;
+/// Sign flag bit (N ⊕ V).
 pub const SREG_S: u8 = 4;
+/// Half-carry flag bit.
 pub const SREG_H: u8 = 5;
+/// Bit-copy storage (`T`) flag bit, used by BST/BLD.
 pub const SREG_T: u8 = 6;
+/// Global interrupt-enable flag bit.
 pub const SREG_I: u8 = 7;
 
-// I/O register addresses (data space addresses, not I/O addresses)
+// I/O register addresses (data-space addresses, not I/O addresses).
+/// Status register (SREG) data-space address.
 pub const SREG_ADDR: u16 = 0x5F;
+/// Stack pointer high byte (SPH) data-space address.
 pub const SPH_ADDR: u16 = 0x5E;
+/// Stack pointer low byte (SPL) data-space address.
 pub const SPL_ADDR: u16 = 0x5D;
 /// Watchdog control register (same address on ATmega32u4 and ATmega328P).
 pub const WDTCSR_ADDR: u16 = 0x60;
@@ -152,42 +184,64 @@ pub const MCUSR_ADDR: u16 = 0x54;
 /// Watchdog Reset Flag bit within MCUSR.
 pub const WDRF_BIT: u8 = 3;
 
-/// Arduboy button identifiers
+/// Arduboy button identifiers, passed to [`Arduboy::set_button`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Button {
+    /// Up on the directional pad.
     Up,
+    /// Down on the directional pad.
     Down,
+    /// Left on the directional pad.
     Left,
+    /// Right on the directional pad.
     Right,
+    /// The A button.
     A,
+    /// The B button.
     B,
 }
 
 /// Main Arduboy emulator combining all subsystems
 pub struct Arduboy {
+    /// AVR CPU state (PC, SP, SREG, cycle counter, sleep flag).
     pub cpu: Cpu,
+    /// Unified memory: register file + I/O + SRAM, flash, and EEPROM.
     pub mem: Memory,
+    /// SSD1306 OLED display controller (Arduboy).
     pub display: Ssd1306,
+    /// 8-bit Timer/Counter0 (`millis()`/`micros()` timebase).
     pub timer0: peripherals::Timer8,
+    /// 16-bit Timer/Counter1 (tone generation).
     pub timer1: peripherals::Timer16,
+    /// 16-bit Timer/Counter3 (tone generation, 32u4 only).
     pub timer3: peripherals::Timer16,
+    /// 10-bit high-speed Timer/Counter4 (PWM audio / LEDs, 32u4 only).
     pub timer4: peripherals::Timer4,
     /// Timer2 (ATmega328P only, 8-bit async)
     pub timer2: peripherals::Timer8,
+    /// Watchdog timer (WDR / timeout reset / interrupt).
     pub watchdog: peripherals::Watchdog,
+    /// SPI master controller (display and FX flash bus).
     pub spi: peripherals::Spi,
+    /// PLL frequency synthesizer (USB clock / fast PWM).
     pub pll: peripherals::Pll,
+    /// Analog-to-digital converter.
     pub adc: peripherals::Adc,
+    /// EEPROM read/write controller.
     pub eeprom_ctrl: peripherals::EepromCtrl,
     /// Arduboy FX external SPI flash
     pub fx_flash: peripherals::FxFlash,
     /// SPI data received from flash (MISO byte)
     spdr_in: u8,
-    /// Pin states for GPIO (active-low buttons etc)
+    /// External input levels for PORTB pins (active-low buttons etc.).
     pub pin_b: u8,
+    /// External input levels for PORTC pins.
     pub pin_c: u8,
+    /// External input levels for PORTD pins.
     pub pin_d: u8,
+    /// External input levels for PORTE pins.
     pub pin_e: u8,
+    /// External input levels for PORTF pins.
     pub pin_f: u8,
     /// SPI output buffer with raw port state per byte
     spi_out: Vec<(u8, u8, u8, u8)>, // (byte, portd_val, portf_val, portc_val)
@@ -247,6 +301,7 @@ pub struct Arduboy {
     pub serial_buf: Vec<u8>,
     /// SPI byte trace for diagnostics (first 50 entries when enabled)
     pub spi_trace: Vec<String>,
+    /// Enables recording into [`spi_trace`](Self::spi_trace).
     pub spi_trace_enabled: bool,
     /// USB endpoint number (UENUM register)
     usb_uenum: u8,
@@ -272,10 +327,15 @@ pub struct Arduboy {
     pub debugger: debugger::Debugger,
 }
 
+/// Which display controller the loaded ROM drives, auto-detected from the first
+/// SPI command it issues.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum DisplayType {
+    /// Not yet determined (no display command seen).
     Unknown,
+    /// SSD1306 128×64 OLED (Arduboy).
     Ssd1306,
+    /// PCD8544 84×48 LCD (Gamebuino Classic).
     Pcd8544,
 }
 

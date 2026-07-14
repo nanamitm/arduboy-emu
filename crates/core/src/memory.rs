@@ -42,11 +42,13 @@ impl Memory {
 
     // --- Register access ---
 
+    /// Read general-purpose register `r` (R0–R31).
     #[inline(always)]
     pub fn reg(&self, r: u8) -> u8 {
         self.data[r as usize]
     }
 
+    /// Write general-purpose register `r` (R0–R31).
     #[inline(always)]
     pub fn set_reg(&mut self, r: u8, v: u8) {
         self.data[r as usize] = v;
@@ -132,6 +134,8 @@ impl Memory {
 
     // --- Data space ---
 
+    /// Read a byte from the data space by raw address, bypassing peripheral
+    /// side effects. Out-of-range addresses read as 0.
     #[inline(always)]
     pub fn read_raw(&self, addr: u16) -> u8 {
         let a = addr as usize;
@@ -142,6 +146,8 @@ impl Memory {
         }
     }
 
+    /// Write a byte to the data space by raw address, bypassing peripheral
+    /// side effects. Out-of-range addresses are ignored.
     #[inline(always)]
     pub fn write_raw(&mut self, addr: u16, v: u8) {
         let a = addr as usize;

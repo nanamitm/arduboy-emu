@@ -61,6 +61,7 @@ pub struct ChannelBuffer {
 }
 
 impl ChannelBuffer {
+    /// Create an empty channel buffer.
     pub fn new() -> Self {
         ChannelBuffer {
             edges: Vec::with_capacity(4096),
@@ -168,7 +169,9 @@ impl Biquad {
 /// - **Edge-based** (GPIO toggle / SBI PIND): records pin-level transitions
 /// - **PWM DAC** (Timer2 OCR2B): records 8-bit analog sample values
 pub struct AudioBuffer {
+    /// Left channel (Speaker 1: PC6 on 32u4, PD3 on 328P).
     pub left: ChannelBuffer,
+    /// Right channel (Speaker 2: PB5).
     pub right: ChannelBuffer,
     /// Frame start tick (set at beginning of run_frame).
     pub frame_start: u64,
@@ -197,6 +200,8 @@ pub struct AudioBuffer {
 }
 
 impl AudioBuffer {
+    /// Create an empty stereo audio buffer (filters default to 44.1 kHz until
+    /// the first render reconfigures them).
     pub fn new() -> Self {
         // Initialize filters with default 44100 Hz; reconfigured on first render
         let sr = 44100.0;

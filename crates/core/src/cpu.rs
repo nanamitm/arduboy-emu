@@ -33,6 +33,8 @@ pub struct Cpu {
 }
 
 impl Cpu {
+    /// Create CPU state at power-on: PC 0, stack pointer at the top of SRAM,
+    /// cleared SREG, and awake.
     pub fn new() -> Self {
         Cpu {
             pc: 0,
@@ -43,11 +45,13 @@ impl Cpu {
         }
     }
 
+    /// Read SREG flag `bit` (see the `SREG_*` constants).
     #[inline(always)]
     pub fn flag(&self, bit: u8) -> bool {
         self.sreg & (1 << bit) != 0
     }
 
+    /// Set or clear SREG flag `bit` (see the `SREG_*` constants).
     #[inline(always)]
     pub fn set_flag(&mut self, bit: u8, v: bool) {
         if v {
