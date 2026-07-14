@@ -375,3 +375,94 @@ fn timer1_ctc_tone_frequency() {
         "Timer1 CTC tone {tone} Hz != expected {expected} Hz"
     );
 }
+
+/// EEPROM path: write a byte through the EEAR/EEDR/EECR registers (as the save
+/// code does), then read it back both through the CPU (EEDR read) and the
+/// emulator's EEPROM store.
+#[test]
+fn eeprom_write_then_read() {
+    // I/O addresses: EECR=0x1F, EEDR=0x20, EEARL=0x21, EEARH=0x22.
+    const EECR: u8 = 0x1F;
+    const EEDR: u8 = 0x20;
+    const EEARL: u8 = 0x21;
+    const EEARH: u8 = 0x22;
+
+    let st = sts(0x0100, 16);
+    let words = [
+        ldi(16, 0x10),
+        out(EEARL, 16), // EEAR = 0x0010
+        ldi(16, 0x00),
+        out(EEARH, 16),
+        ldi(16, 0xA5),
+        out(EEDR, 16), // EEDR = 0xA5
+        ldi(16, 0x02),
+        out(EECR, 16), // EEPE → commit write
+        in_(16, EEDR),
+        st[0],
+        st[1], // read back EEDR → RAM 0x0100
+        rjmp(-1),
+    ];
+    let rom = words_to_bytes(&words);
+
+    let mut ard = Arduboy::new();
+    ard.mem.flash[..rom.len()].copy_from_slice(&rom);
+    for _ in 0..2 {
+        ard.run_frame();
+    }
+
+    assert_eq!(ard.save_eeprom()[0x10], 0xA5, "EEPROM cell not written");
+    assert_eq!(ard.mem.data[0x0100], 0xA5, "EEDR read-back mismatch");
+}
+
+/// FX flash path: drive the external W25Q128 over SPI with a Read Data (0x03)
+/// command + 24-bit address, then clock out two bytes and mirror them to RAM.
+/// Exercises the FX CS gate (PD1 low) and the flash SPI state machine.
+#[test]
+fn fx_flash_spi_read() {
+    // I/O addresses: DDRD=0x0A, PORTD=0x0B, SPDR=0x2E. FX CS = PD1 (active low).
+    const DDRD: u8 = 0x0A;
+    const PORTD: u8 = 0x0B;
+    const SPDR: u8 = 0x2E;
+
+    let s0 = sts(0x0100, 16);
+    let s1 = sts(0x0101, 16);
+    let words = [
+        ldi(16, 0x02),
+        out(DDRD, 16), // PD1 as output
+        ldi(16, 0x40),
+        out(PORTD, 16), // PD1 low (FX selected), PD6 high (display deselected)
+        ldi(16, 0x03),
+        out(SPDR, 16), // Read Data command
+        ldi(16, 0x00),
+        out(SPDR, 16), // address [23:16]
+        ldi(16, 0x00),
+        out(SPDR, 16), // address [15:8]
+        ldi(16, 0x10),
+        out(SPDR, 16), // address [7:0] → read from 0x000010
+        ldi(16, 0x00),
+        out(SPDR, 16), // clock out byte 0 → data[0x10]
+        in_(16, SPDR),
+        s0[0],
+        s0[1], // → RAM 0x0100
+        ldi(16, 0x00),
+        out(SPDR, 16), // clock out byte 1 → data[0x11]
+        in_(16, SPDR),
+        s1[0],
+        s1[1], // → RAM 0x0101
+        rjmp(-1),
+    ];
+    let rom = words_to_bytes(&words);
+
+    let mut ard = Arduboy::new();
+    let mut fx = vec![0xFFu8; 0x20];
+    fx[0x10] = 0xC3;
+    fx[0x11] = 0x5A;
+    ard.fx_flash.load_data(&fx);
+    ard.mem.flash[..rom.len()].copy_from_slice(&rom);
+    for _ in 0..2 {
+        ard.run_frame();
+    }
+
+    assert_eq!(ard.mem.data[0x0100], 0xC3, "FX read byte 0 mismatch");
+    assert_eq!(ard.mem.data[0x0101], 0x5A, "FX read byte 1 mismatch");
+}
