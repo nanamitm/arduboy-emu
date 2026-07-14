@@ -1,11 +1,12 @@
-//! End-to-end golden-framebuffer regression test.
+//! End-to-end golden regression tests over the emulator's hot paths.
 //!
-//! A tiny, self-authored AVR program (no external/licensed ROM) drives the
-//! SSD1306 over the emulated SPI bus to paint a deterministic pattern, then
-//! loops. Running it exercises the full pipeline — instruction fetch/decode/
-//! execute, the SPI peripheral, the display CS/DC routing, and SSD1306
-//! command/data handling — and the resulting framebuffer is pinned by a hash.
-//! If any of those behaviours regress, the hash (and lit-pixel count) change.
+//! Each test builds a tiny, self-authored AVR program (via the little assembler
+//! below — no external/licensed ROM) and runs it end-to-end, then pins a
+//! deterministic result. Together they cover the display pipelines (SSD1306 and
+//! PCD8544 framebuffer hashes), button input (PINF → RAM), the timer + interrupt
+//! path (Timer0 overflow ISR count), and audio (Timer1 CTC tone frequency).
+//! A regression anywhere in fetch/decode/execute, the SPI/display routing, the
+//! GPIO input path, interrupt dispatch, or the timers flips one of the goldens.
 
 use arduboy_core::{Arduboy, CpuType};
 
@@ -25,6 +26,55 @@ fn out(a: u8, r: u8) -> u16 {
 /// RJMP k (word offset)
 fn rjmp(k: i16) -> u16 {
     0xC000 | (k as u16 & 0x0FFF)
+}
+
+/// IN Rd, A  (A is an I/O address 0..=63)
+fn in_(d: u8, a: u8) -> u16 {
+    0xB000 | (((a as u16 >> 4) & 0x3) << 9) | ((d as u16 & 0x1F) << 4) | (a as u16 & 0x0F)
+}
+
+/// STS addr, Rr — 32-bit; returns both words.
+fn sts(addr: u16, r: u8) -> [u16; 2] {
+    [0x9200 | ((r as u16 & 0x1F) << 4), addr]
+}
+
+/// LDS Rd, addr — 32-bit; returns both words.
+fn lds(d: u8, addr: u16) -> [u16; 2] {
+    [0x9000 | ((d as u16 & 0x1F) << 4), addr]
+}
+
+/// JMP k — 32-bit (k < 0x10000); returns both words.
+fn jmp(k: u16) -> [u16; 2] {
+    [0x940C, k]
+}
+
+/// INC Rd
+fn inc(d: u8) -> u16 {
+    0x9400 | ((d as u16 & 0x1F) << 4) | 0x03
+}
+
+fn sei() -> u16 {
+    0x9478
+}
+fn reti() -> u16 {
+    0x9518
+}
+
+/// Push a 16-bit word as two little-endian flash bytes.
+fn words_to_bytes(words: &[u16]) -> Vec<u8> {
+    let mut bytes = Vec::with_capacity(words.len() * 2);
+    for &w in words {
+        bytes.push((w & 0xFF) as u8);
+        bytes.push((w >> 8) as u8);
+    }
+    bytes
+}
+
+/// Write `words` into `flash` at a word address.
+fn place(flash: &mut [u8], word_addr: usize, words: &[u16]) {
+    let bytes = words_to_bytes(words);
+    let start = word_addr * 2;
+    flash[start..start + bytes.len()].copy_from_slice(&bytes);
 }
 
 // I/O addresses (not data-space): PORTD = 0x0B, SPDR = 0x2E.
@@ -187,3 +237,141 @@ fn pcd8544_golden_framebuffer() {
 }
 
 const GOLDEN_HASH_PCD: u64 = 0x6F35_C76B_1E1F_D245;
+
+/// Input path: a ROM that continuously mirrors PINF (the Arduboy direction
+/// buttons) into RAM. Pressing a button drives its pin low (active-low), and
+/// the CPU must observe it through the PINF read path (DDRF=0 → external pin).
+#[test]
+fn button_input_reaches_ram() {
+    use arduboy_core::Button;
+
+    // loop: IN r16, PINF(0x0F); STS 0x0100, r16; RJMP loop
+    let s = sts(0x0100, 16);
+    let words = [in_(16, 0x0F), s[0], s[1], rjmp(-4)];
+    let rom = words_to_bytes(&words);
+
+    let mut ard = Arduboy::new();
+    ard.mem.flash[..rom.len()].copy_from_slice(&rom);
+
+    let run = |ard: &mut Arduboy| {
+        for _ in 0..2 {
+            ard.run_frame();
+        }
+        ard.mem.data[0x0100]
+    };
+
+    // Nothing pressed: PINF reads all-high.
+    assert_eq!(run(&mut ard), 0xFF, "idle PINF should be 0xFF");
+
+    // Up = PF7 (active low) → bit 7 clears.
+    ard.set_button(Button::Up, true);
+    assert_eq!(run(&mut ard), 0x7F, "Up should clear PF7");
+
+    // Add Right = PF6 → bits 7 and 6 clear.
+    ard.set_button(Button::Right, true);
+    assert_eq!(run(&mut ard), 0x3F, "Up+Right should clear PF7 and PF6");
+
+    // Release both → back to all-high.
+    ard.set_button(Button::Up, false);
+    ard.set_button(Button::Right, false);
+    assert_eq!(run(&mut ard), 0xFF, "release should restore PINF");
+}
+
+/// Timer + interrupt path: Timer0 overflow interrupt (the millis() timer) with
+/// TOIE0 enabled fires the ISR, which increments a RAM counter. This exercises
+/// timer counting, the interrupt-enable gate (SEI), and dispatch to the correct
+/// vector (0x002E) — the same machinery whose Timer4 address was once wrong.
+#[test]
+fn timer0_overflow_interrupt_counts() {
+    // I/O addresses: TCCR0B = 0x25, prescaler clk/1024 (CS = 0b101).
+    const TCCR0B: u8 = 0x25;
+    // Data addresses: TIMSK0 = 0x6E (TOIE0 = bit 0), counter in SRAM at 0x0100.
+    const TIMSK0: u16 = 0x006E;
+    const COUNTER: u16 = 0x0100;
+
+    let mut flash = vec![0u8; 0x400];
+
+    // Reset vector → main (word 0x40); Timer0 OVF vector (word 0x2E) → ISR (0x50).
+    place(&mut flash, 0x0000, &jmp(0x0040));
+    place(&mut flash, 0x002E, &jmp(0x0050));
+
+    // main: configure Timer0, enable its overflow interrupt, clear counter, spin.
+    let ts = sts(TIMSK0, 16);
+    let cs = sts(COUNTER, 16);
+    let main = [
+        ldi(16, 0x05),
+        out(TCCR0B, 16), // clk/1024
+        ldi(16, 0x01),
+        ts[0],
+        ts[1], // TIMSK0 = TOIE0
+        ldi(16, 0x00),
+        cs[0],
+        cs[1], // counter = 0
+        sei(),
+        rjmp(-1), // spin
+    ];
+    place(&mut flash, 0x0040, &main);
+
+    // ISR: counter += 1; RETI.
+    let ld = lds(16, COUNTER);
+    let st = sts(COUNTER, 16);
+    let isr = [ld[0], ld[1], inc(16), st[0], st[1], reti()];
+    place(&mut flash, 0x0050, &isr);
+
+    let mut ard = Arduboy::new();
+    ard.mem.flash[..flash.len()].copy_from_slice(&flash);
+
+    for _ in 0..10 {
+        ard.run_frame();
+    }
+
+    let count = ard.mem.data[COUNTER as usize];
+    println!("timer0 overflow count = {count}");
+
+    // ~2.16M cycles / (256 × 1024) ≈ 8 overflows; deterministic, so pin it.
+    assert_eq!(
+        count, GOLDEN_TIMER0_COUNT,
+        "Timer0 overflow ISR count changed"
+    );
+}
+
+const GOLDEN_TIMER0_COUNT: u8 = 8;
+
+/// Audio path: configure Timer1 for CTC mode with OC1A toggle (how the Arduboy
+/// tone libraries generate a square wave), and check the frequency the emulator
+/// derives for the speaker. f = clk / (2 · prescale · (OCR1A + 1)).
+#[test]
+fn timer1_ctc_tone_frequency() {
+    // Timer1 registers (data space): TCCR1A=0x80, TCCR1B=0x81, OCR1AL=0x88,
+    // OCR1AH=0x89. All above the I/O range, so use STS.
+    let mut prog: Vec<u16> = Vec::new();
+    let set = |prog: &mut Vec<u16>, addr: u16, val: u8| {
+        prog.push(ldi(16, val));
+        let s = sts(addr, 16);
+        prog.push(s[0]);
+        prog.push(s[1]);
+    };
+    set(&mut prog, 0x80, 0x40); // TCCR1A: COM1A = 01 (toggle OC1A)
+    set(&mut prog, 0x89, 0x00); // OCR1AH = 0
+    set(&mut prog, 0x88, 0xFF); // OCR1AL = 255 → OCR1A = 255
+    set(&mut prog, 0x81, 0x0A); // TCCR1B: WGM12 (CTC) + CS=010 (clk/8) → starts timer
+    prog.push(rjmp(-1));
+    let rom = words_to_bytes(&prog);
+
+    let mut ard = Arduboy::new();
+    ard.mem.flash[..rom.len()].copy_from_slice(&rom);
+    for _ in 0..2 {
+        ard.run_frame();
+    }
+
+    let (l, r) = ard.get_audio_tone();
+    let tone = l.max(r);
+    println!("audio tone L={l} R={r}");
+
+    // 16 MHz / (2 · 8 · 256) = 3906.25 Hz.
+    let expected = 16_000_000.0 / (2.0 * 8.0 * 256.0);
+    assert!(
+        (tone - expected).abs() < 1.0,
+        "Timer1 CTC tone {tone} Hz != expected {expected} Hz"
+    );
+}
