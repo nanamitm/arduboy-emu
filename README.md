@@ -82,6 +82,8 @@ cargo run --release -- game.hex
 ### Creating Installers
 
 Pre-built installer scripts for all platforms. See [BUILDING.md](BUILDING.md) for full details.
+Before publishing a tagged release, follow [RELEASE_VERIFICATION.md](RELEASE_VERIFICATION.md)
+to verify the artifacts against the ROM corpora and (when available) real hardware.
 
 ```bash
 ./build-installers.sh                            # Auto-detect OS
