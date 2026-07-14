@@ -3,6 +3,9 @@ name: Deploy Web Client to Cloudflare Pages
 on:
   push:
     branches: [main]
+    # A release tag gets an isolated Pages preview so that the exact tagged
+    # WebAssembly bundle can be verified before it is promoted to production.
+    tags: ['v*']
     paths:
       - 'web/**'
       - 'crates/core/**'
@@ -12,6 +15,12 @@ on:
       - '.github/workflows/deploy-pages.yml'
       - '.github/workflows/update-rom-catalog.yml'
   workflow_dispatch:
+    inputs:
+      production:
+        description: Promote the selected v* tag to the production Pages branch
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -24,6 +33,24 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
 
+      - name: Select Pages deployment branch
+        id: target
+        shell: bash
+        run: |
+          if [[ "${{ inputs.production }}" == "true" ]]; then
+            if [[ "$GITHUB_REF_TYPE" != "tag" || ! "$GITHUB_REF_NAME" =~ ^v ]]; then
+              echo "Production deployments must be run from a v* tag." >&2
+              exit 1
+            fi
+            echo "pages_branch=main" >> "$GITHUB_OUTPUT"
+          elif [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            echo "pages_branch=release-$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+          else
+            # Never publish ordinary main-branch updates directly. They remain
+            # available for review at this stable Pages preview branch.
+            echo "pages_branch=preview-main" >> "$GITHUB_OUTPUT"
+          fi
+
       # web/pkg is committed, so a Rust/wasm-pack build is not required here.
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
@@ -31,4 +58,4 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
-          command: pages deploy web --project-name=arduboy-web --branch=main
+          command: pages deploy web --project-name=arduboy-web --branch=${{ steps.target.outputs.pages_branch }}

@@ -36,11 +36,13 @@ jobs:
           git push
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
-      - name: Deploy updated catalog to Cloudflare Pages
+      - name: Deploy updated catalog to the main preview
         if: steps.commit.outputs.changed == 'true'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
-          command: pages deploy web --project-name=arduboy-web --branch=main
+          # Production is only updated by promoting a verified v* tag through
+          # deploy-pages.yml. Catalog refreshes must not change a release.
+          command: pages deploy web --project-name=arduboy-web --branch=preview-main
