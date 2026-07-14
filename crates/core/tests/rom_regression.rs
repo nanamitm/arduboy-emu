@@ -7,7 +7,7 @@
 //! command/data handling — and the resulting framebuffer is pinned by a hash.
 //! If any of those behaviours regress, the hash (and lit-pixel count) change.
 
-use arduboy_core::Arduboy;
+use arduboy_core::{Arduboy, CpuType};
 
 // --- Minimal AVR assembler (only the encodings this test needs) ---
 
@@ -76,6 +76,47 @@ fn build_rom() -> Vec<u8> {
     bytes
 }
 
+// Gamebuino Classic (328P) PCD8544: CS = PC1, DC = PC2 (active low). PORTC is
+// I/O address 0x08. Command mode = both low; data mode = DC (PC2) high.
+const IO_PORTC: u8 = 0x08;
+const PORTC_CMD: u8 = 0x00; // CS low (selected), DC low (command)
+const PORTC_DATA: u8 = 0x04; // CS low (selected), DC high (PC2) → data
+
+/// Build a PCD8544 driver ROM: basic init, address (0,0), 4 data bytes, spin.
+fn build_rom_pcd8544() -> Vec<u8> {
+    let mut words: Vec<u16> = Vec::new();
+    let send = |words: &mut Vec<u16>, byte: u8| {
+        words.push(ldi(18, byte));
+        words.push(out(IO_SPDR, 18));
+    };
+
+    words.push(ldi(16, PORTC_CMD));
+    words.push(ldi(17, PORTC_DATA));
+
+    // Command mode.
+    words.push(out(IO_PORTC, 16));
+    send(&mut words, 0x20); // function set: basic instruction set, horizontal addr
+    send(&mut words, 0x0C); // display control: normal mode
+    send(&mut words, 0x80); // set X address = 0
+    send(&mut words, 0x40); // set Y address (page) = 0
+
+    // Data mode: same 4-column pattern as the SSD1306 test.
+    words.push(out(IO_PORTC, 17));
+    send(&mut words, 0xFF);
+    send(&mut words, 0x81);
+    send(&mut words, 0x18);
+    send(&mut words, 0xAA);
+
+    words.push(rjmp(-1));
+
+    let mut bytes = Vec::with_capacity(words.len() * 2);
+    for w in words {
+        bytes.push((w & 0xFF) as u8);
+        bytes.push((w >> 8) as u8);
+    }
+    bytes
+}
+
 /// FNV-1a hash of the framebuffer bytes.
 fn fnv1a(data: &[u8]) -> u64 {
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
@@ -116,3 +157,33 @@ fn ssd1306_golden_framebuffer() {
 
 // Captured from the emulator; frozen as the regression golden.
 const GOLDEN_HASH: u64 = 0x0133_CD73_A7AA_4DC5;
+
+#[test]
+fn pcd8544_golden_framebuffer() {
+    let rom = build_rom_pcd8544();
+    let mut ard = Arduboy::new_with_cpu(CpuType::Atmega328p);
+    ard.mem.flash[..rom.len()].copy_from_slice(&rom);
+
+    for _ in 0..5 {
+        ard.run_frame();
+    }
+
+    let fb = ard.framebuffer_u32();
+    let blank = Arduboy::new_with_cpu(CpuType::Atmega328p).framebuffer_u32();
+    let lit = fb.iter().filter(|&&p| p != blank[0]).count();
+    let rgba = ard.framebuffer_rgba();
+    let hash = fnv1a(rgba);
+
+    println!("pcd8544 lit_pixels={lit} hash=0x{hash:016X}");
+
+    assert_eq!(
+        lit, 16,
+        "unexpected lit-pixel count (PCD8544 rendering changed)"
+    );
+    assert_eq!(
+        hash, GOLDEN_HASH_PCD,
+        "PCD8544 framebuffer hash changed (rendering regressed)"
+    );
+}
+
+const GOLDEN_HASH_PCD: u64 = 0x6F35_C76B_1E1F_D245;
