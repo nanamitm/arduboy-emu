@@ -264,12 +264,18 @@ async function autoLoadFromQuery() {
   const url = new URLSearchParams(location.search).get('rom');
   if (!url) return;
   try {
+    // Plain cross-origin fetch: succeeds only if the host allows CORS.
+    // See "ROM loading & CORS policy" in web/README.md.
     const resp = await fetch(url);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const bytes = new Uint8Array(await resp.arrayBuffer());
     await loadRomBytes(url.split('/').pop() || 'rom.hex', bytes);
   } catch (err) {
-    setStatus(`Could not fetch ${url}: ${err}`, true);
+    // A CORS or mixed-content block surfaces as an opaque "Failed to fetch".
+    const hint = /^http:/i.test(url)
+      ? ' (http:// is blocked as mixed content — use https://)'
+      : ' (the host may not allow cross-origin access; download the ROM and use Open ROM… instead)';
+    setStatus(`Could not fetch ${url}: ${err}${hint}`, true);
   }
 }
 

@@ -96,3 +96,72 @@ directory `web`. (Slower cold builds; the prebuilt option is recommended.)
 
 `web/_headers` sets long-cache for the hashed `pkg/` assets and no-cache for the
 shell. Cloudflare serves `.wasm` as `application/wasm` automatically.
+
+## ROM loading & CORS policy
+
+There are three ways to get a ROM into the emulator:
+
+| Method | How it reaches the app | Cross-origin? |
+|--------|------------------------|:---:|
+| **Open ROM…** / **drag-and-drop** | Read locally in the browser (`FileReader`) | No fetch — always works |
+| **`?rom=<url>` deep link** | Browser `fetch(url)` → bytes | Subject to CORS |
+| **Online catalog** | Browser `fetch(game.hexUrl)` | Subject to CORS |
+
+### Why remote URLs depend on CORS
+
+The site is **fully static** — there is no server-side code that could download a
+ROM on the user's behalf. A `?rom=` or catalog load is a plain browser `fetch()`
+issued from the page's own origin, so it is governed by the browser's
+[same-origin policy](https://developer.mozilla.org/docs/Web/Security/Same-origin_policy).
+A cross-origin fetch only succeeds when the **remote host returns a permissive
+`Access-Control-Allow-Origin`** header. This is a browser security boundary that a
+static site cannot and should not bypass.
+
+Two consequences to be aware of:
+
+- **Mixed content.** The site is served over HTTPS, so `http://` ROM URLs are
+  blocked by the browser as mixed content. Use `https://`.
+- **CORS headers.** If the host does not send `Access-Control-Allow-Origin`, the
+  fetch fails and the app shows `Could not fetch <url>: …`. This is expected, not
+  a bug in the emulator.
+
+### What works
+
+- **Same-origin** ROMs (hosted alongside the site, e.g. `?rom=game.hex`).
+- CORS-permissive static hosts, including **`raw.githubusercontent.com`**
+  (`access-control-allow-origin: *`) and **jsDelivr** (`cdn.jsdelivr.net`).
+  The bundled catalog works precisely because its `hexUrl`s are GitHub-raw links.
+- Object storage with CORS enabled (S3/R2/GCS bucket configured to allow the
+  site's origin).
+
+### What does not work
+
+- Arbitrary web servers, blog links, or game pages that serve the `.hex` without
+  CORS headers. Their download link may work in a normal browser tab but **not**
+  from `fetch()` in another origin.
+
+### Policy: no proxy
+
+We deliberately **do not** run a server-side CORS proxy to “fix” such URLs:
+
+- it would turn the deployment into an **open relay** (an abuse and security
+  risk), and it contradicts the static, serverless design;
+- it would route users' ROM URLs — and the ROM bytes — **through our
+  infrastructure**, which we don't want for privacy reasons.
+
+So cross-origin ROM loading is intentionally left to the source host's CORS
+configuration.
+
+### Workarounds for users
+
+1. **Download and open locally** — save the `.hex`/`.arduboy` and use **Open ROM…**
+   or drag-and-drop. No fetch, no CORS.
+2. **Re-host on a CORS-friendly service** — push it to a GitHub repo and link the
+   `raw.githubusercontent.com` URL, use jsDelivr, or a bucket with CORS enabled.
+3. **Self-host the site** next to the ROM so the request is same-origin.
+
+### Privacy
+
+The `?rom=` URL is fetched **directly by the user's browser**; no ROM URL or ROM
+data passes through the project's servers (there are none). Save states and
+EEPROM are stored only in the browser's IndexedDB.
