@@ -232,8 +232,9 @@ async function loadRom(file) {
 
 async function loadRomBytes(name, bytes) {
   await persistEeprom(); // flush the previous game's EEPROM first
+  let result;
   try {
-    const result = await workerCall('loadFile', { name, data: bytes.buffer }, [bytes.buffer]);
+    result = await workerCall('loadFile', { name, data: bytes.buffer }, [bytes.buffer]);
   } catch (err) {
     setStatus(`Load failed: ${err}`, true);
     return;
