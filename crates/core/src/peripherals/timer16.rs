@@ -154,7 +154,7 @@ impl Timer16 {
         };
     }
 
-    pub fn write(&mut self, addr: u16, value: u8, _old: u8, data: &mut [u8]) -> bool {
+    pub fn write(&mut self, addr: u16, value: u8, _old: u8, data: &mut [u8], tick: u64) -> bool {
         if addr == self.addrs.tifr {
             // Writing 1 to a TIFR bit CLEARS the interrupt flag
             if value & 1 != 0 {
@@ -182,10 +182,19 @@ impl Timer16 {
             return true;
         }
         if addr == self.addrs.tccr_b {
+            // Advance to `tick` under the old clock select before changing it,
+            // so counts already earned are not attributed to the new setting.
+            self.do_update(tick);
+            let was_stopped = self.prescale == 0;
             self.wgm[2] = value & 8 != 0;
             self.wgm[3] = value & 0x10 != 0;
             self.cs = value & 7;
             self.update_state();
+            if was_stopped && self.prescale != 0 {
+                // Clock restarted: the counter was frozen while stopped, so the
+                // stopped interval must not be replayed as a burst of matches.
+                self.tick = tick;
+            }
             data[addr as usize] = value;
             return true;
         }
@@ -291,21 +300,19 @@ impl Timer16 {
             if old_tcnt <= self.ocr_a && total >= self.ocr_a as u32 {
                 // Crossed OCR_A at least once
                 let past_match = total - self.ocr_a as u32;
-                // +1 for first match, then count full wraps of the remainder
-                let matches = 1 + (past_match.saturating_sub(1)) / period;
                 let remainder = if past_match == 0 {
                     0 // exactly hit OCR_A → reset to 0
                 } else {
                     (past_match - 1) % period
                 };
-                self.ocf_a = self.ocf_a.saturating_add(matches);
+                self.ocf_a = 1;
                 self.tcnt = remainder as u16;
             } else {
                 // Didn't reach OCR_A (or old_tcnt > OCR_A due to runtime OCR change:
                 // counter runs to 0xFFFF, wraps, then hits new OCR_A)
                 self.tcnt = (total & 0xFFFF) as u16;
                 if total > 0xFFFF {
-                    self.tov += 1;
+                    self.tov = 1;
                 }
             }
         } else {
@@ -316,21 +323,21 @@ impl Timer16 {
             // Compare match flags (unconditional — not gated on interrupt enable).
             // The OCIEn bits only control whether the interrupt fires, not the flag.
             if self.ocr_a > 0 && old_tcnt < self.ocr_a && cnt as u16 >= self.ocr_a {
-                self.ocf_a += 1;
+                self.ocf_a = 1;
             }
 
             // Overflow
             if cnt > self.top as u32 {
-                self.tov += 1;
+                self.tov = 1;
             }
         }
 
         // Compare match B/C flags (unconditional)
         if self.ocr_b > 0 && old_tcnt < self.ocr_b && self.tcnt >= self.ocr_b {
-            self.ocf_b += 1;
+            self.ocf_b = 1;
         }
         if self.ocr_c > 0 && old_tcnt < self.ocr_c && self.tcnt >= self.ocr_c {
-            self.ocf_c += 1;
+            self.ocf_c = 1;
         }
     }
 

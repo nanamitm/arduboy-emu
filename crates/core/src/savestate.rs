@@ -215,7 +215,7 @@ pub struct SaveState {
     pub speaker_last_edge: u64,
     pub speaker_half_period: u64,
     pub speaker_last_active: u64,
-    pub speaker2_prev_pb5: bool,
+    pub speaker2_prev: bool,
     pub speaker2_last_edge: u64,
     pub speaker2_half_period: u64,
     pub speaker2_last_active: u64,

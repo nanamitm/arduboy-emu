@@ -220,7 +220,7 @@ impl Timer4 {
     }
 
     /// Handle register writes. Returns true if the address was handled.
-    pub fn write(&mut self, addr: u16, value: u8) -> bool {
+    pub fn write(&mut self, addr: u16, value: u8, tick: u64) -> bool {
         match addr {
             0xBE => {
                 // TCNT4 low — combine with TC4H
@@ -239,11 +239,14 @@ impl Timer4 {
             }
             0xC1 => {
                 // TCCR4B
+                let was_stopped = self.prescale == 0;
                 self.tccr_b = value;
                 self.cs = value & 0x0F;
                 self.prescale = Self::decode_prescale(self.cs);
-                if self.prescale > 0 && self.tick == 0 {
-                    self.tick = 1;
+                if was_stopped && self.prescale > 0 {
+                    // Clock restarted: resync so the stopped interval is not
+                    // replayed the moment the timer runs again.
+                    self.tick = tick;
                 }
                 true
             }

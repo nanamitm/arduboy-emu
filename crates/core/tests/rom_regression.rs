@@ -466,3 +466,121 @@ fn fx_flash_spi_read() {
     assert_eq!(ard.mem.data[0x0100], 0xC3, "FX read byte 0 mismatch");
     assert_eq!(ard.mem.data[0x0101], 0x5A, "FX read byte 1 mismatch");
 }
+
+/// DEC Rd
+fn dec(d: u8) -> u16 {
+    0x940A | ((d as u16 & 0x1F) << 4)
+}
+
+/// BRNE k (word offset, -64..=63)
+fn brne(k: i8) -> u16 {
+    0xF401 | (((k as u16) & 0x7F) << 3)
+}
+
+/// A busy-wait of `outer × inner` loop iterations using r17/r18/r19.
+/// Roughly `outer × inner × 3` cycles.
+fn delay(outer: u8, inner: u8) -> Vec<u16> {
+    vec![
+        ldi(19, outer),
+        ldi(18, inner),
+        // inner: dec r18; brne inner
+        dec(18),
+        brne(-2),
+        // outer: dec r19; brne back to the inner-loop setup
+        dec(19),
+        brne(-5),
+    ]
+}
+
+/// A tone library (ArduboyTones) drives the speaker from the Timer3 compare
+/// match ISR, and *stops the timer* (`TCCR3B = 0`) between tones. When the
+/// clock select is written again for the next tone, the interval the counter
+/// spent stopped must not be replayed: doing so queues thousands of compare
+/// matches, which fire back-to-back and burn the tone's toggle budget in an
+/// instant — every tone after the first comes out as a click.
+///
+/// This runs a tone, stops the timer, idles for ~1 M cycles, restarts it, and
+/// counts the compare-match interrupts in a fixed window after the restart.
+#[test]
+fn timer3_restart_does_not_replay_stopped_interval() {
+    // Data-space addresses (ATmega32u4).
+    const TCCR3A: u16 = 0x0090;
+    const TCCR3B: u16 = 0x0091;
+    const OCR3AL: u16 = 0x0098;
+    const OCR3AH: u16 = 0x0099;
+    const TIMSK3: u16 = 0x0071;
+    const COUNTER: u16 = 0x0100;
+
+    // CTC, prescaler /8, OCR3A = 999 → a compare match every 8000 CPU cycles.
+    const CTC_CS8: u8 = 0x0A; // WGM32 | CS31
+    const OCIE3A: u8 = 0x02;
+
+    let mut flash = vec![0u8; 0x800];
+
+    // Reset vector → main (word 0x0080); Timer3 COMPA vector → ISR (word 0x0100).
+    place(&mut flash, 0x0000, &jmp(0x0080));
+    place(&mut flash, 0x0040, &jmp(0x0100));
+
+    let mut main: Vec<u16> = Vec::new();
+    let store = |main: &mut Vec<u16>, addr: u16, value: u8| {
+        main.push(ldi(16, value));
+        let st = sts(addr, 16);
+        main.push(st[0]);
+        main.push(st[1]);
+    };
+
+    // Start the "tone".
+    store(&mut main, OCR3AL, 0xE7); // 999
+    store(&mut main, OCR3AH, 0x03);
+    store(&mut main, TCCR3A, 0x00);
+    store(&mut main, TCCR3B, CTC_CS8);
+    store(&mut main, TIMSK3, OCIE3A);
+    main.push(sei());
+    main.extend(delay(24, 255)); // tone plays (~18 k cycles)
+
+    // End of tone: disable the interrupt and stop the counter.
+    store(&mut main, TIMSK3, 0x00);
+    store(&mut main, TCCR3B, 0x00);
+    main.extend(delay(255, 255)); // silence (~197 k cycles each)
+    main.extend(delay(255, 255));
+    main.extend(delay(255, 255));
+    main.extend(delay(255, 255));
+    main.extend(delay(255, 255)); // ~1 M cycles stopped in total
+
+    // Next tone: clear the counter, then restart exactly like the first time.
+    store(&mut main, COUNTER, 0x00);
+    store(&mut main, TCCR3B, CTC_CS8);
+    store(&mut main, TIMSK3, OCIE3A);
+    main.extend(delay(64, 255)); // measurement window (~49 k cycles)
+
+    // Stop counting.
+    store(&mut main, TIMSK3, 0x00);
+    store(&mut main, TCCR3B, 0x00);
+    main.push(rjmp(-1));
+    place(&mut flash, 0x0080, &main);
+
+    // ISR: counter += 1; RETI.
+    let ld = lds(16, COUNTER);
+    let st = sts(COUNTER, 16);
+    let isr = [ld[0], ld[1], inc(16), st[0], st[1], reti()];
+    place(&mut flash, 0x0100, &isr);
+
+    let mut ard = Arduboy::new();
+    ard.mem.flash[..flash.len()].copy_from_slice(&flash);
+
+    for _ in 0..10 {
+        ard.run_frame();
+    }
+
+    let count = ard.mem.data[COUNTER as usize];
+    println!("timer3 compare matches in the window after restart = {count}");
+
+    // ~49 k cycles / 8000 ≈ 6 matches. Replaying the ~1 M stopped cycles would
+    // queue ~125 extra matches on top, which is what the bug looked like.
+    assert_eq!(
+        count, GOLDEN_TIMER3_RESTART_COUNT,
+        "Timer3 compare-match count after a stop/restart changed"
+    );
+}
+
+const GOLDEN_TIMER3_RESTART_COUNT: u8 = 6;

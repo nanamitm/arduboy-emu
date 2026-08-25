@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Tones after the first one were cut to a click** — A stopped 8/16-bit timer (`CSn2:0 = 0`) kept its last update timestamp, so the first update after the clock was switched back on replayed the whole stopped interval at once. Restarting a timer after a one-second pause queued ~125 compare matches, which then fired back-to-back and drained the tone's toggle budget in ~16 ms. ArduboyTones stops Timer3 between tones, so in practice every tone after the first was silent — for every game using the library. Timers now resync their timestamp when the clock select goes from stopped to running.
+- **Compare-match / overflow flags on the 16-bit timers** are single flags again (`OCFnA/B/C`, `TOVn`), as on the hardware, instead of a queue of pending matches that could be drained one per peripheral update.
+- **Speaker 2 was read from the wrong pin** — GPIO audio for the right channel watched PB5 (the blue RGB LED on the Arduboy) instead of PC7. High-volume/bridge mode (`ArduboyTones::volumeMode(VOLUME_ALWAYS_HIGH)`, `TONE_HIGH_VOLUME`) is now audible, LED activity no longer leaks into the audio, and the pin is only sampled on the ATmega32u4.
+- **Timer3 `TCNT3H`/`TCNT3L` addresses were swapped** (`TCNT3L` is 0x94, `TCNT3H` is 0x95); Timer1 was already correct.
+
+### Added
+
+- `timer3_restart_does_not_replay_stopped_interval` regression test: mimics a tone library by running Timer3 in CTC with the compare-match interrupt, stopping the counter, idling ~1 M cycles, restarting, and pinning the number of interrupts in a fixed window (6; it was 129 before the fix).
+
 ## [0.8.1] - 2025-02-18
 
 ### Added

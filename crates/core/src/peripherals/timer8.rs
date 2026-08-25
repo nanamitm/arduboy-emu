@@ -117,7 +117,7 @@ impl Timer8 {
     }
 
     /// Handle writes to timer registers. Returns true if addr was handled.
-    pub fn write(&mut self, addr: u16, value: u8, _old: u8, data: &mut [u8]) -> bool {
+    pub fn write(&mut self, addr: u16, value: u8, _old: u8, data: &mut [u8], tick: u64) -> bool {
         if addr == self.addrs.tifr {
             // Writing 1 to a TIFR bit CLEARS the interrupt flag
             if value & 1 != 0 {
@@ -141,9 +141,15 @@ impl Timer8 {
             return true;
         }
         if addr == self.addrs.tccr_b {
+            let was_stopped = self.prescale == 0;
             self.wgm02 = value & 8 != 0;
             self.cs = value & 7;
             self.update_prescale();
+            if was_stopped && self.prescale != 0 {
+                // Clock restarted: don't replay the interval the counter spent
+                // stopped as a burst of compare matches / overflows.
+                self.tick = tick;
+            }
             data[addr as usize] = value;
             return true;
         }

@@ -285,9 +285,10 @@ pub struct Arduboy {
     speaker_half_period: u64,
     /// GPIO speaker 1: tick when last tone was detected
     speaker_last_active: u64,
-    /// GPIO speaker 2 (PB5): previous state for edge detection
-    speaker2_prev_pb5: bool,
-    /// GPIO speaker 2: tick of last PB5 edge
+    /// GPIO speaker 2: previous state for edge detection
+    /// ATmega32u4: PC7 (Arduboy Speaker 2, driven in high-volume/bridge mode)
+    speaker2_prev: bool,
+    /// GPIO speaker 2: tick of last edge
     speaker2_last_edge: u64,
     /// GPIO speaker 2: measured half-period in ticks
     speaker2_half_period: u64,
@@ -438,8 +439,8 @@ impl Arduboy {
             ocr_ch: 0x9D,
             ocr_cl: 0x9C,
             timsk: 0x71,
-            tcnth: 0x94,
-            tcntl: 0x95,
+            tcnth: 0x95,
+            tcntl: 0x94,
             int_ovf: peripherals::INT_TIMER3_OVF,
             int_compa: peripherals::INT_TIMER3_COMPA,
             int_compb: peripherals::INT_TIMER3_COMPB,
@@ -522,7 +523,7 @@ impl Arduboy {
             speaker_last_edge: 0,
             speaker_half_period: 0,
             speaker_last_active: 0,
-            speaker2_prev_pb5: false,
+            speaker2_prev: false,
             speaker2_last_edge: 0,
             speaker2_half_period: 0,
             speaker2_last_active: 0,
@@ -665,7 +666,7 @@ impl Arduboy {
         self.speaker_last_edge = 0;
         self.speaker_half_period = 0;
         self.speaker_last_active = 0;
-        self.speaker2_prev_pb5 = false;
+        self.speaker2_prev = false;
         self.speaker2_last_edge = 0;
         self.speaker2_half_period = 0;
         self.speaker2_last_active = 0;
@@ -1207,24 +1208,6 @@ impl Arduboy {
             0x24 | 0x25 => {
                 // DDRB, PORTB
                 if a < self.mem.data.len() {
-                    // Detect PB5 (speaker pin 2) transitions for GPIO-driven audio
-                    if addr == 0x25 {
-                        let new_pb5 = value & (1 << 5) != 0;
-                        if new_pb5 != self.speaker2_prev_pb5 {
-                            let tick = self.cpu.tick;
-                            // Record edge in sample-accurate audio buffer
-                            self.audio_buf.right.push(tick, new_pb5);
-                            if self.speaker2_last_edge > 0 {
-                                let half = tick.saturating_sub(self.speaker2_last_edge);
-                                if half >= 400 && half <= 270000 {
-                                    self.speaker2_half_period = half;
-                                    self.speaker2_last_active = tick;
-                                }
-                            }
-                            self.speaker2_last_edge = tick;
-                            self.speaker2_prev_pb5 = new_pb5;
-                        }
-                    }
                     self.mem.data[a] = value;
                     // Track LED states from PORTB
                     // RX LED = PB0 (active-low)
@@ -1248,6 +1231,24 @@ impl Arduboy {
                             "{}_WRITE old=0x{:02X} new=0x{:02X} PC=0x{:04X}",
                             reg_name, old, value, self.cpu.pc
                         ));
+                    }
+                    // Detect PC7 (speaker pin 2, Arduboy only) transitions. Driven
+                    // in antiphase with PC6 by the high-volume (bridge) mode.
+                    if addr == 0x28 && self.cpu_type == CpuType::Atmega32u4 {
+                        let new_pc7 = value & (1 << 7) != 0;
+                        if new_pc7 != self.speaker2_prev {
+                            let tick = self.cpu.tick;
+                            self.audio_buf.right.push(tick, new_pc7);
+                            if self.speaker2_last_edge > 0 {
+                                let half = tick.saturating_sub(self.speaker2_last_edge);
+                                if half >= 400 && half <= 270000 {
+                                    self.speaker2_half_period = half;
+                                    self.speaker2_last_active = tick;
+                                }
+                            }
+                            self.speaker2_last_edge = tick;
+                            self.speaker2_prev = new_pc7;
+                        }
                     }
                     // Detect PC6 (speaker pin 1) transitions for GPIO-driven audio
                     if addr == 0x28 {
@@ -1382,20 +1383,29 @@ impl Arduboy {
             return;
         }
         // Timer0 writes
-        if self.timer0.write(addr, value, old, &mut self.mem.data) {
+        if self
+            .timer0
+            .write(addr, value, old, &mut self.mem.data, self.cpu.tick)
+        {
             return;
         }
         // Timer1 writes
-        if self.timer1.write(addr, value, old, &mut self.mem.data) {
+        if self
+            .timer1
+            .write(addr, value, old, &mut self.mem.data, self.cpu.tick)
+        {
             return;
         }
         // Timer3 writes
-        if self.timer3.write(addr, value, old, &mut self.mem.data) {
+        if self
+            .timer3
+            .write(addr, value, old, &mut self.mem.data, self.cpu.tick)
+        {
             return;
         }
         // Timer4 writes (ATmega32u4 only)
         if self.cpu_type == CpuType::Atmega32u4 {
-            if self.timer4.write(addr, value) {
+            if self.timer4.write(addr, value, self.cpu.tick) {
                 if a < self.mem.data.len() {
                     self.mem.data[a] = value;
                 }
@@ -1406,7 +1416,10 @@ impl Arduboy {
         if self.cpu_type == CpuType::Atmega328p {
             let was_pwm = self.timer2.is_pwm_dac_active();
             let old_ocr_b = self.timer2.ocr_b();
-            if self.timer2.write(addr, value, old, &mut self.mem.data) {
+            if self
+                .timer2
+                .write(addr, value, old, &mut self.mem.data, self.cpu.tick)
+            {
                 // PWM DAC audio: when Timer2 is in PWM mode with OC2B output
                 // enabled, OCR2B changes represent audio samples. The Timer1
                 // ISR updates OCR2B at ~57 kHz to produce waveforms via PWM.
@@ -2130,7 +2143,7 @@ impl Arduboy {
             speaker_last_edge: self.speaker_last_edge,
             speaker_half_period: self.speaker_half_period,
             speaker_last_active: self.speaker_last_active,
-            speaker2_prev_pb5: self.speaker2_prev_pb5,
+            speaker2_prev: self.speaker2_prev,
             speaker2_last_edge: self.speaker2_last_edge,
             speaker2_half_period: self.speaker2_half_period,
             speaker2_last_active: self.speaker2_last_active,
@@ -2205,7 +2218,7 @@ impl Arduboy {
         self.speaker_last_edge = s.speaker_last_edge;
         self.speaker_half_period = s.speaker_half_period;
         self.speaker_last_active = s.speaker_last_active;
-        self.speaker2_prev_pb5 = s.speaker2_prev_pb5;
+        self.speaker2_prev = s.speaker2_prev;
         self.speaker2_last_edge = s.speaker2_last_edge;
         self.speaker2_half_period = s.speaker2_half_period;
         self.speaker2_last_active = s.speaker2_last_active;
