@@ -163,7 +163,7 @@ impl Biquad {
 /// Stereo audio buffer with optional post-processing pipeline.
 ///
 /// Left channel = Speaker 1 (PC6 on 32u4, PD3 on 328P).
-/// Right channel = Speaker 2 (PB5).
+/// Right input = Speaker 2 (PC7 on Arduboy).
 ///
 /// Supports two audio modes:
 /// - **Edge-based** (GPIO toggle / SBI PIND): records pin-level transitions
@@ -171,8 +171,11 @@ impl Biquad {
 pub struct AudioBuffer {
     /// Left channel (Speaker 1: PC6 on 32u4, PD3 on 328P).
     pub left: ChannelBuffer,
-    /// Right channel (Speaker 2: PB5).
+    /// Right input (Speaker 2: PC7 on Arduboy).
     pub right: ChannelBuffer,
+    /// Render the voltage difference across the Arduboy piezo to both channels.
+    /// Other hardware retains independent channel/PWM rendering.
+    pub bridge_mode: bool,
     /// Frame start tick (set at beginning of run_frame).
     pub frame_start: u64,
     /// Frame end tick (set at end of run_frame).
@@ -208,6 +211,7 @@ impl AudioBuffer {
         AudioBuffer {
             left: ChannelBuffer::new(),
             right: ChannelBuffer::new(),
+            bridge_mode: false,
             frame_start: 0,
             frame_end: 0,
             pwm_samples: Vec::with_capacity(4096),
@@ -331,8 +335,9 @@ impl AudioBuffer {
             !r_edges[0].level
         };
 
-        let l_active = !l_edges.is_empty() || use_pwm;
-        let r_active = !r_edges.is_empty();
+        let bridge = self.bridge_mode && !use_pwm;
+        let l_active = !l_edges.is_empty() || use_pwm || (bridge && !r_edges.is_empty());
+        let r_active = !r_edges.is_empty() || (bridge && l_active);
 
         // Envelope ramp rates (per sample)
         let attack_rate = 1.0 / (ENV_ATTACK_S * sample_rate as f32);
@@ -362,6 +367,14 @@ impl AudioBuffer {
             // ── Right channel: always edge-based ──
             let r_raw =
                 Self::sample_channel(&mut ri, r_edges, &mut r_level, p_start, p_end, tps, volume);
+            let (l_raw, r_raw) = if bridge {
+                // Pin levels are bipolar here: divide by two to map the
+                // physical voltage difference back into [-volume, volume].
+                let mono = (l_raw - r_raw) * 0.5;
+                (mono, mono)
+            } else {
+                (l_raw, r_raw)
+            };
 
             if apply_post {
                 // (1) Click suppression: per-channel envelope

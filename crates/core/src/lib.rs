@@ -34,7 +34,7 @@
 //! 3. **GPIO bit-bang** — Direct `digitalWrite` toggling of speaker pins
 //!
 //! Stereo output: Speaker 1 (PC6 on 32u4, PD3 on 328P) → left channel,
-//! Speaker 2 (PB5) → right channel.
+//! Arduboy PC6/PC7 drive one piezo: their difference is sent to both channels.
 //!
 //! ## Example
 //!
@@ -544,6 +544,7 @@ impl Arduboy {
             profiler: profiler::Profiler::new(),
             debugger: debugger::Debugger::new(),
         };
+        ard.audio_buf.bridge_mode = cpu_type == CpuType::Atmega32u4;
         // Initialize SP to top of SRAM
         let sp = (data_size - 1) as u16;
         ard.mem.data[SPH_ADDR as usize] = (sp >> 8) as u8;
