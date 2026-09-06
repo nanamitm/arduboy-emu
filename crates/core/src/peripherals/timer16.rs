@@ -292,28 +292,32 @@ impl Timer16 {
 
         let old_tcnt = self.tcnt;
 
-        if self.ctc && self.ocr_a > 0 {
-            // CTC mode: counter resets to 0 at OCR_A (unconditional — not gated on ocie_a)
+        if self.ctc {
+            // OCR_A is held for one timer clock; the following clock clears
+            // TCNT. Preserve that phase regardless of update batch size.
             let period = self.ocr_a as u32 + 1;
             let total = old_tcnt as u32 + interval;
-
-            if old_tcnt <= self.ocr_a && total >= self.ocr_a as u32 {
-                // Crossed OCR_A at least once
-                let past_match = total - self.ocr_a as u32;
-                let remainder = if past_match == 0 {
-                    0 // exactly hit OCR_A → reset to 0
-                } else {
-                    (past_match - 1) % period
-                };
-                self.ocf_a = 1;
-                self.tcnt = remainder as u16;
+            let until_match = if old_tcnt < self.ocr_a {
+                (self.ocr_a - old_tcnt) as u32
+            } else if old_tcnt == self.ocr_a {
+                period
             } else {
-                // Didn't reach OCR_A (or old_tcnt > OCR_A due to runtime OCR change:
-                // counter runs to 0xFFFF, wraps, then hits new OCR_A)
-                self.tcnt = (total & 0xFFFF) as u16;
-                if total > 0xFFFF {
+                // OCR_A was lowered below TCNT: first wrap at 0xFFFF.
+                0x10000 - old_tcnt as u32 + self.ocr_a as u32
+            };
+            if interval >= until_match {
+                self.ocf_a = 1;
+            }
+            if old_tcnt <= self.ocr_a {
+                self.tcnt = (total % period) as u16;
+                if self.ocr_a == 0xFFFF && total >= 0x10000 {
                     self.tov = 1;
                 }
+            } else if total >= 0x10000 {
+                self.tov = 1;
+                self.tcnt = ((total - 0x10000) % period) as u16;
+            } else {
+                self.tcnt = total as u16;
             }
         } else {
             // Non-CTC modes: free-running counter
