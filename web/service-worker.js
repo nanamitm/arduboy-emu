@@ -1,6 +1,6 @@
 // Offline shell for the installable web client. Upstream ROM downloads remain
 // network requests so their licenses and latest versions stay with their host.
-const CACHE_NAME = 'arduboy-web-v2';
+const CACHE_NAME = 'arduboy-web-v3';
 const APP_SHELL = [
   './',
   './index.html',
@@ -36,5 +36,20 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(fetch(request).catch(() => caches.match('./index.html')));
     return;
   }
-  event.respondWith(caches.match(request).then((cached) => cached || fetch(request)));
+  // Refresh fixed asset URLs on every online visit. A code/WASM release must
+  // reach existing installations even when this worker's source is unchanged.
+  event.respondWith((async () => {
+    try {
+      const response = await fetch(request);
+      if (response.ok) {
+        const copy = response.clone();
+        event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.put(request, copy)));
+      }
+      return response;
+    } catch (error) {
+      const cached = await caches.match(request);
+      if (cached) return cached;
+      throw error;
+    }
+  })());
 });
