@@ -2,8 +2,10 @@
 
 A repeatable procedure for verifying a release **before** it is published.
 The `Build Release Packages` workflow (`.github/workflows/release.yml`) produces
-a **draft** GitHub release with per-platform installers; this checklist gates
-promoting that draft to a published release.
+a **draft** GitHub release with per-platform installers. The same `v*` tag also
+deploys the tagged Web client to a Cloudflare Pages preview branch named after
+the tag. The production Web client is updated only by manually promoting a
+verified `v*` tag. This checklist gates that promotion and publishing the draft.
 
 Artifacts under test:
 
@@ -11,7 +13,8 @@ Artifacts under test:
 |----------|----------|----------|
 | Windows  | `*.exe` (Inno Setup) | `arduboy-emu.exe` |
 | Linux    | `*.deb`, `*.rpm` | `arduboy-emu` |
-| macOS    | `*.pkg`, `*.dmg` (universal) | `arduboy-emu` |
+| macOS    | `*.pkg` (universal) | `Arduboy Emulator.app` in `/Applications` |
+| macOS    | `*.dmg` (universal) | drag `Arduboy Emulator.app` to `/Applications` |
 | Web      | Cloudflare Pages deploy | browser client |
 
 The desktop binary is `arduboy-emu` (crate `arduboy-frontend`). It supports a
@@ -105,18 +108,23 @@ For every artifact:
    and A/B, and produces sound (unmuted).
 5. **Persistence** — trigger an EEPROM save (play a game that saves) and a quick
    save state; relaunch and confirm they restore.
-6. **Uninstall** — confirm the uninstaller removes the app cleanly.
+6. **Remove** — confirm the uninstaller removes the app cleanly. For the macOS
+   DMG, instead eject it and remove the copied `.app`.
 
-| Platform | Artifact | Integrity | Install | Launch+run | Persistence | Uninstall |
+| Platform | Artifact | Integrity | Install | Launch+run | Persistence | Remove |
 |----------|----------|:---:|:---:|:---:|:---:|:---:|
 | Windows `.exe` | | ☐ | ☐ | ☐ | ☐ | ☐ |
 | Linux `.deb`   | | ☐ | ☐ | ☐ | ☐ | ☐ |
 | Linux `.rpm`   | | ☐ | ☐ | ☐ | ☐ | ☐ |
 | macOS `.pkg`   | | ☐ | ☐ | ☐ | ☐ | ☐ |
-| macOS `.dmg`   | | ☐ | ☐ | ☐ | ☐ | ☐ |
+| macOS `.dmg` (copy `.app`) | | ☐ | ☐ | ☐ | ☐ | ☐ |
 
-Web client (deployed URL): load a ROM from the catalog and via a `?rom=` GitHub-
-raw link, confirm render + input + audio, and that a PWA install works. See the
+Web client: use the Cloudflare Pages preview URL emitted by the tag's `Deploy
+Web Client to Cloudflare Pages` workflow (the Pages branch is
+`release-vX.Y.Z`). Load a ROM from the catalog and via a `?rom=` GitHub-raw
+link, confirm render + input + audio, and that a PWA install works. The
+`preview-main` deployment is for ongoing development only; it is never a
+release artifact. See the
 [CORS policy](web/README.md#rom-loading--cors-policy) for URL-load caveats.
 
 ---
@@ -159,5 +167,7 @@ Release vX.Y.Z verification
 - [ ] CHANGELOG.md updated for vX.Y.Z
 ```
 
-Only after every applicable box is checked, edit the draft GitHub release
-(remove the `draft` flag) to publish.
+Only after every applicable box is checked, manually run `Deploy Web Client to
+Cloudflare Pages` on the release `vX.Y.Z` tag with `production=true`. The
+workflow rejects production deployments from non-tag refs. After that succeeds,
+edit the draft GitHub release (remove the `draft` flag) to publish.
